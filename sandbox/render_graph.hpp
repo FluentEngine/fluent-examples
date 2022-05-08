@@ -6,9 +6,23 @@
 
 namespace fluent::rg
 {
+
+using PassCallback = void ( * )( CommandBuffer* cmd, void* user_data );
+
 struct GraphPass
 {
-	RenderPass* pass;
+	RenderPass*  pass;
+	PassCallback cb;
+	void*        user_data;
+
+	void
+	execute( CommandBuffer* cmd )
+	{
+		if ( cb )
+		{
+			cb( cmd, user_data );
+		}
+	}
 
 	void
 	create( const Device* device, const RenderPassInfo& info )
@@ -20,6 +34,13 @@ struct GraphPass
 	destroy( const Device* device )
 	{
 		destroy_render_pass( device, pass );
+	}
+
+	void
+	set_callback( void* user_data, PassCallback&& callback )
+	{
+		this->user_data = user_data;
+		cb              = callback;
 	}
 };
 

@@ -43,8 +43,8 @@ RenderGraph::execute( CommandBuffer* cmd, Image* image )
 {
 	ImageBarrier barrier {};
 	barrier.image     = image;
-	barrier.old_state = ResourceState::eUndefined;
-	barrier.new_state = ResourceState::eColorAttachment;
+	barrier.old_state = ResourceState::UNDEFINED;
+	barrier.new_state = ResourceState::COLOR_ATTACHMENT;
 
 	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
 
@@ -53,8 +53,8 @@ RenderGraph::execute( CommandBuffer* cmd, Image* image )
 	render_pass_info.height                         = image->height;
 	render_pass_info.color_attachment_count         = 1;
 	render_pass_info.color_attachments[ 0 ]         = image;
-	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::eClear;
-	render_pass_info.color_image_states[ 0 ] = ResourceState::eColorAttachment;
+	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::CLEAR;
+	render_pass_info.color_image_states[ 0 ] = ResourceState::COLOR_ATTACHMENT;
 
 	GraphPass* pass = get_render_pass( render_pass_info );
 
@@ -66,10 +66,11 @@ RenderGraph::execute( CommandBuffer* cmd, Image* image )
 	pass_begin_info.clear_values[ 0 ].color[ 3 ] = 1.0f;
 
 	cmd_begin_render_pass( cmd, &pass_begin_info );
+	pass->execute( cmd );
 	cmd_end_render_pass( cmd );
 
-	barrier.old_state = ResourceState::eColorAttachment;
-	barrier.new_state = ResourceState::ePresent;
+	barrier.old_state = ResourceState::COLOR_ATTACHMENT;
+	barrier.new_state = ResourceState::PRESENT;
 
 	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
 };

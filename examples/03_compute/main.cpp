@@ -38,11 +38,11 @@ create_output_texture()
 	image_info.layer_count = 1;
 	image_info.mip_levels  = 1;
 	image_info.depth       = 1;
-	image_info.format      = Format::eR8G8B8A8Unorm;
+	image_info.format      = Format::R8G8B8A8_UNORM;
 	image_info.width       = 1024;
 	image_info.height      = 1024;
 	image_info.descriptor_type =
-	    DescriptorType::eSampledImage | DescriptorType::eStorageImage;
+	    DescriptorType::SAMPLED_IMAGE | DescriptorType::STORAGE_IMAGE;
 
 	create_image( device, &image_info, &output_texture );
 
@@ -50,8 +50,8 @@ create_output_texture()
 	image_barrier.image     = output_texture;
 	image_barrier.src_queue = queue;
 	image_barrier.dst_queue = queue;
-	image_barrier.old_state = ResourceState::eUndefined;
-	image_barrier.new_state = ResourceState::eGeneral;
+	image_barrier.old_state = ResourceState::UNDEFINED;
+	image_barrier.new_state = ResourceState::GENERAL;
 
 	CommandBuffer* cmd = command_buffers[ 0 ];
 
@@ -86,7 +86,7 @@ init_sample()
 
 	BufferInfo buffer_info {};
 	buffer_info.size            = sizeof( CameraUBO );
-	buffer_info.descriptor_type = DescriptorType::eUniformBuffer;
+	buffer_info.descriptor_type = DescriptorType::UNIFORM_BUFFER;
 
 	create_buffer( device, &buffer_info, &uniform_buffer );
 
@@ -99,7 +99,7 @@ init_sample()
 	create_descriptor_set( device, &descriptor_set_info, &descriptor_set );
 
 	ImageDescriptor image_descriptor {};
-	image_descriptor.resource_state = ResourceState::eGeneral;
+	image_descriptor.resource_state = ResourceState::GENERAL;
 	image_descriptor.image          = output_texture;
 
 	DescriptorWrite descriptor_write {};
@@ -158,17 +158,17 @@ update_sample( CommandBuffer* cmd, f32 )
 
 	cmd_blit_image( cmd,
 	                output_texture,
-	                ResourceState::eGeneral,
+	                ResourceState::GENERAL,
 	                swapchain->images[ image_index ],
-	                ResourceState::eUndefined,
-	                Filter::eLinear );
+	                ResourceState::UNDEFINED,
+	                Filter::LINEAR );
 
 	ImageBarrier to_present_barrier {};
 	to_present_barrier.src_queue = queue;
 	to_present_barrier.dst_queue = queue;
 	to_present_barrier.image     = swapchain->images[ image_index ];
-	to_present_barrier.old_state = ResourceState::eTransferDst;
-	to_present_barrier.new_state = ResourceState::ePresent;
+	to_present_barrier.old_state = ResourceState::TRANSFER_DST;
+	to_present_barrier.new_state = ResourceState::PRESENT;
 
 	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &to_present_barrier );
 
@@ -176,8 +176,8 @@ update_sample( CommandBuffer* cmd, f32 )
 	to_storage_barrier.src_queue = queue;
 	to_storage_barrier.dst_queue = queue;
 	to_storage_barrier.image     = output_texture;
-	to_storage_barrier.old_state = ResourceState::eTransferSrc;
-	to_storage_barrier.new_state = ResourceState::eGeneral;
+	to_storage_barrier.old_state = ResourceState::TRANSFER_SRC;
+	to_storage_barrier.new_state = ResourceState::GENERAL;
 
 	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &to_storage_barrier );
 

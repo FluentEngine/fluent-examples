@@ -5,7 +5,7 @@
 #include "tiny_obj_loader.h"
 #include "render_graph.hpp"
 
-#define RG 1
+#define RG 0
 
 using namespace fluent;
 
@@ -173,8 +173,8 @@ void
 create_ubo_buffer()
 {
 	BufferInfo desc {};
-	desc.descriptor_type = DescriptorType::eUniformBuffer;
-	desc.memory_usage    = MemoryUsage::eCpuToGpu;
+	desc.descriptor_type = DescriptorType::UNIFORM_BUFFER;
+	desc.memory_usage    = MemoryUsage::CPU_TO_GPU;
 	desc.size            = sizeof( ShaderData );
 
 	create_buffer( device, &desc, &ubo_buffer );
@@ -208,25 +208,25 @@ create_model_pipeline()
 	layout.binding_info_count            = 1;
 	layout.binding_infos[ 0 ].binding    = 0;
 	layout.binding_infos[ 0 ].stride     = sizeof( Vertex );
-	layout.binding_infos[ 0 ].input_rate = VertexInputRate::eVertex;
+	layout.binding_infos[ 0 ].input_rate = VertexInputRate::VERTEX;
 	layout.attribute_info_count          = 3;
 	layout.attribute_infos[ 0 ].binding  = 0;
 	layout.attribute_infos[ 0 ].location = 0;
-	layout.attribute_infos[ 0 ].format   = Format::eR32G32B32Sfloat;
+	layout.attribute_infos[ 0 ].format   = Format::R32G32B32_SFLOAT;
 	layout.attribute_infos[ 0 ].offset   = offsetof( struct Vertex, position );
 	layout.attribute_infos[ 1 ].binding  = 0;
 	layout.attribute_infos[ 1 ].location = 1;
-	layout.attribute_infos[ 1 ].format   = Format::eR32G32B32Sfloat;
+	layout.attribute_infos[ 1 ].format   = Format::R32G32B32_SFLOAT;
 	layout.attribute_infos[ 1 ].offset   = offsetof( struct Vertex, normal );
 	layout.attribute_infos[ 2 ].binding  = 0;
 	layout.attribute_infos[ 2 ].location = 2;
-	layout.attribute_infos[ 2 ].format   = Format::eR32G32Sfloat;
+	layout.attribute_infos[ 2 ].format   = Format::R32G32_SFLOAT;
 	layout.attribute_infos[ 2 ].offset   = offsetof( struct Vertex, tex_coord );
-	pipeline_info.rasterizer_info.cull_mode    = CullMode::eBack;
-	pipeline_info.rasterizer_info.front_face   = FrontFace::eCounterClockwise;
-	pipeline_info.rasterizer_info.polygon_mode = PolygonMode::eFill;
-	pipeline_info.topology = PrimitiveTopology::eTriangleList;
-	pipeline_info.depth_state_info.compare_op  = CompareOp::eLess;
+	pipeline_info.rasterizer_info.cull_mode    = CullMode::BACK;
+	pipeline_info.rasterizer_info.front_face   = FrontFace::COUNTER_CLOCKWISE;
+	pipeline_info.rasterizer_info.polygon_mode = PolygonMode::FILL;
+	pipeline_info.topology = PrimitiveTopology::TRIANGLE_LIST;
+	pipeline_info.depth_state_info.compare_op  = CompareOp::LESS;
 	pipeline_info.depth_state_info.depth_test  = true;
 	pipeline_info.depth_state_info.depth_write = true;
 
@@ -247,7 +247,7 @@ create_model_pipeline()
 
 	ImageDescriptor image_descriptor {};
 	image_descriptor.image          = model_texture;
-	image_descriptor.resource_state = ResourceState::eShaderReadOnly;
+	image_descriptor.resource_state = ResourceState::SHADER_READ_ONLY;
 
 	DescriptorWrite descriptor_writes[ 3 ]     = {};
 	descriptor_writes[ 0 ].descriptor_name     = "global_ubo";
@@ -282,18 +282,18 @@ create_depth_image()
 	depth_image_info.width           = swapchain->width;
 	depth_image_info.height          = swapchain->height;
 	depth_image_info.depth           = 1;
-	depth_image_info.format          = Format::eD32Sfloat;
+	depth_image_info.format          = Format::D32_SFLOAT;
 	depth_image_info.layer_count     = 1;
 	depth_image_info.mip_levels      = 1;
-	depth_image_info.sample_count    = SampleCount::e1;
-	depth_image_info.descriptor_type = DescriptorType::eDepthStencilAttachment;
+	depth_image_info.sample_count    = SampleCount::E1;
+	depth_image_info.descriptor_type = DescriptorType::DEPTH_STENCIL_ATTACHMENT;
 
 	create_image( device, &depth_image_info, &depth_image );
 
 	ImageBarrier barrier {};
 	barrier.image     = depth_image;
-	barrier.old_state = ResourceState::eUndefined;
-	barrier.new_state = ResourceState::eDepthStencilWrite;
+	barrier.old_state = ResourceState::UNDEFINED;
+	barrier.new_state = ResourceState::DEPTH_STENCIL_WRITE;
 	barrier.src_queue = graphics_queue;
 	barrier.dst_queue = graphics_queue;
 
@@ -311,17 +311,17 @@ gbuffer_pass_info()
 	render_pass_info.height                         = swapchain->height;
 	render_pass_info.color_attachment_count         = 3;
 	render_pass_info.color_attachments[ 0 ]         = position_image;
-	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::eClear;
-	render_pass_info.color_image_states[ 0 ] = ResourceState::eColorAttachment;
+	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::CLEAR;
+	render_pass_info.color_image_states[ 0 ] = ResourceState::COLOR_ATTACHMENT;
 	render_pass_info.color_attachments[ 1 ]  = normal_image;
-	render_pass_info.color_attachment_load_ops[ 1 ] = AttachmentLoadOp::eClear;
-	render_pass_info.color_image_states[ 1 ] = ResourceState::eColorAttachment;
+	render_pass_info.color_attachment_load_ops[ 1 ] = AttachmentLoadOp::CLEAR;
+	render_pass_info.color_image_states[ 1 ] = ResourceState::COLOR_ATTACHMENT;
 	render_pass_info.color_attachments[ 2 ]  = albedo_spec_image;
-	render_pass_info.color_attachment_load_ops[ 2 ] = AttachmentLoadOp::eClear;
-	render_pass_info.color_image_states[ 2 ] = ResourceState::eColorAttachment;
+	render_pass_info.color_attachment_load_ops[ 2 ] = AttachmentLoadOp::CLEAR;
+	render_pass_info.color_image_states[ 2 ] = ResourceState::COLOR_ATTACHMENT;
 	render_pass_info.depth_stencil           = depth_image;
-	render_pass_info.depth_stencil_load_op   = AttachmentLoadOp::eClear;
-	render_pass_info.depth_stencil_state = ResourceState::eDepthStencilWrite;
+	render_pass_info.depth_stencil_load_op   = AttachmentLoadOp::CLEAR;
+	render_pass_info.depth_stencil_state = ResourceState::DEPTH_STENCIL_WRITE;
 
 	return render_pass_info;
 }
@@ -330,7 +330,7 @@ void
 create_default_sampler()
 {
 	SamplerInfo sampler_info {};
-	sampler_info.mipmap_mode = SamplerMipmapMode::eLinear;
+	sampler_info.mipmap_mode = SamplerMipmapMode::LINEAR;
 	sampler_info.min_lod     = 0;
 	sampler_info.max_lod     = 1000;
 
@@ -347,9 +347,9 @@ create_attachment_images()
 	desc.format       = swapchain->format;
 	desc.layer_count  = 1;
 	desc.mip_levels   = 1;
-	desc.sample_count = SampleCount::e1;
+	desc.sample_count = SampleCount::E1;
 	desc.descriptor_type =
-	    DescriptorType::eColorAttachment | DescriptorType::eSampledImage;
+	    DescriptorType::COLOR_ATTACHMENT | DescriptorType::SAMPLED_IMAGE;
 
 	create_image( device, &desc, &position_image );
 	create_image( device, &desc, &normal_image );
@@ -387,9 +387,9 @@ create_deffered_shading_pipeline()
 	pipeline_info.shader                       = shader;
 	pipeline_info.descriptor_set_layout        = deffered_shading_dsl;
 	pipeline_info.render_pass                  = render_passes[ 0 ];
-	pipeline_info.rasterizer_info.cull_mode    = CullMode::eNone;
-	pipeline_info.rasterizer_info.polygon_mode = PolygonMode::eFill;
-	pipeline_info.topology = PrimitiveTopology::eTriangleStrip;
+	pipeline_info.rasterizer_info.cull_mode    = CullMode::NONE;
+	pipeline_info.rasterizer_info.polygon_mode = PolygonMode::FILL;
+	pipeline_info.topology = PrimitiveTopology::TRIANGLE_STRIP;
 
 	create_graphics_pipeline( device,
 	                          &pipeline_info,
@@ -410,13 +410,13 @@ update_deffered_shading_set()
 	sampler_descriptor.sampler = sampler;
 	ImageDescriptor position_descriptor {};
 	position_descriptor.image          = position_image;
-	position_descriptor.resource_state = ResourceState::eShaderReadOnly;
+	position_descriptor.resource_state = ResourceState::SHADER_READ_ONLY;
 	ImageDescriptor normal_descriptor {};
 	normal_descriptor.image          = normal_image;
-	normal_descriptor.resource_state = ResourceState::eShaderReadOnly;
+	normal_descriptor.resource_state = ResourceState::SHADER_READ_ONLY;
 	ImageDescriptor albedo_spec_descriptor {};
 	albedo_spec_descriptor.image          = albedo_spec_image;
-	albedo_spec_descriptor.resource_state = ResourceState::eShaderReadOnly;
+	albedo_spec_descriptor.resource_state = ResourceState::SHADER_READ_ONLY;
 
 	DescriptorWrite descriptor_writes[ 4 ]     = {};
 	descriptor_writes[ 0 ].descriptor_name     = "u_sampler";
@@ -521,8 +521,8 @@ execute_gbuffer_pass()
 	pass_begin_info.clear_values[ 3 ].stencil    = 0;
 
 	ImageBarrier barrier {};
-	barrier.old_state = ResourceState::eUndefined;
-	barrier.new_state = ResourceState::eColorAttachment;
+	barrier.old_state = ResourceState::UNDEFINED;
+	barrier.new_state = ResourceState::COLOR_ATTACHMENT;
 	barrier.src_queue = graphics_queue;
 	barrier.dst_queue = graphics_queue;
 
@@ -537,8 +537,8 @@ execute_gbuffer_pass()
 	draw_models();
 	cmd_end_render_pass( cmd );
 
-	barrier.old_state = ResourceState::eColorAttachment;
-	barrier.new_state = ResourceState::eShaderReadOnly;
+	barrier.old_state = ResourceState::COLOR_ATTACHMENT;
+	barrier.new_state = ResourceState::SHADER_READ_ONLY;
 
 	barrier.image = position_image;
 	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
@@ -573,8 +573,8 @@ execute_deffered_shading_pass( u32 image_index )
 	ImageBarrier barrier;
 	barrier.src_queue = graphics_queue;
 	barrier.dst_queue = graphics_queue;
-	barrier.old_state = ResourceState::eUndefined;
-	barrier.new_state = ResourceState::eColorAttachment;
+	barrier.old_state = ResourceState::UNDEFINED;
+	barrier.new_state = ResourceState::COLOR_ATTACHMENT;
 	barrier.image     = swapchain->images[ image_index ];
 
 	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
@@ -591,8 +591,8 @@ execute_deffered_shading_pass( u32 image_index )
 	draw_debug_ui();
 	cmd_end_render_pass( cmd );
 
-	barrier.old_state = ResourceState::eColorAttachment;
-	barrier.new_state = ResourceState::ePresent;
+	barrier.old_state = ResourceState::COLOR_ATTACHMENT;
+	barrier.new_state = ResourceState::PRESENT;
 	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
 }
 
@@ -604,7 +604,7 @@ on_init()
 	fs::set_models_directory( "../sandbox/" );
 
 	RendererBackendInfo backend_info {};
-	backend_info.api = RendererAPI::eVulkan;
+	backend_info.api = RendererAPI::VULKAN;
 	create_renderer_backend( &backend_info, &backend );
 
 	DeviceInfo device_info {};
@@ -612,7 +612,7 @@ on_init()
 	create_device( backend, &device_info, &device );
 
 	QueueInfo queue_info {};
-	queue_info.queue_type = QueueType::eGraphics;
+	queue_info.queue_type = QueueType::GRAPHICS;
 	create_queue( device, &queue_info, &graphics_queue );
 
 	for ( u32 i = 0; i < FRAME_COUNT; i++ )
@@ -634,7 +634,7 @@ on_init()
 	window_get_size( get_app_window(),
 	                 &swapchain_info.width,
 	                 &swapchain_info.height );
-	swapchain_info.format          = Format::eB8G8R8A8Srgb;
+	swapchain_info.format          = Format::B8G8R8A8_SRGB;
 	swapchain_info.min_image_count = FRAME_COUNT;
 	swapchain_info.vsync           = true;
 	swapchain_info.queue           = graphics_queue;
@@ -650,8 +650,8 @@ on_init()
 	render_pass_info.width                          = swapchain->width;
 	render_pass_info.height                         = swapchain->height;
 	render_pass_info.color_attachment_count         = 1;
-	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::eClear;
-	render_pass_info.color_image_states[ 0 ] = ResourceState::eColorAttachment;
+	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::CLEAR;
+	render_pass_info.color_image_states[ 0 ] = ResourceState::COLOR_ATTACHMENT;
 
 	render_passes = new RenderPass*[ swapchain->image_count ];
 
@@ -664,12 +664,12 @@ on_init()
 	ResourceLoader::init( device, 30 * 1024 * 1024 * 8 );
 
 	BufferInfo buffer_info {};
-	buffer_info.descriptor_type = DescriptorType::eVertexBuffer;
-	buffer_info.memory_usage    = MemoryUsage::eGpuOnly;
+	buffer_info.descriptor_type = DescriptorType::VERTEX_BUFFER;
+	buffer_info.memory_usage    = MemoryUsage::GPU_ONLY;
 	buffer_info.size            = VERTEX_BUFFER_SIZE;
 	create_buffer( device, &buffer_info, &vertex_buffer );
-	buffer_info.descriptor_type = DescriptorType::eIndexBuffer;
-	buffer_info.memory_usage    = MemoryUsage::eGpuOnly;
+	buffer_info.descriptor_type = DescriptorType::INDEX_BUFFER;
+	buffer_info.memory_usage    = MemoryUsage::GPU_ONLY;
 	buffer_info.size            = INDEX_BUFFER_SIZE;
 	create_buffer( device, &buffer_info, &index_buffer );
 
@@ -684,8 +684,8 @@ on_init()
 	                         false,
 	                         &size,
 	                         &data );
-	image_info.format          = Format::eR8G8B8A8Srgb;
-	image_info.descriptor_type = DescriptorType::eSampledImage;
+	image_info.format          = Format::R8G8B8A8_SRGB;
+	image_info.descriptor_type = DescriptorType::SAMPLED_IMAGE;
 	create_image( device, &image_info, &model_texture );
 
 	ResourceLoader::begin_recording();
@@ -826,8 +826,8 @@ on_resize( u32 width, u32 height )
 	render_pass_info.width                          = width;
 	render_pass_info.height                         = height;
 	render_pass_info.color_attachment_count         = 1;
-	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::eClear;
-	render_pass_info.color_image_states[ 0 ] = ResourceState::eColorAttachment;
+	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::CLEAR;
+	render_pass_info.color_image_states[ 0 ] = ResourceState::COLOR_ATTACHMENT;
 
 	for ( u32 i = 0; i < swapchain->image_count; i++ )
 	{

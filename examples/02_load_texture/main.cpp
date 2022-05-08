@@ -44,30 +44,31 @@ init_sample()
 	VertexLayout& vertex_layout                 = pipeline_info.vertex_layout;
 	vertex_layout.binding_info_count            = 1;
 	vertex_layout.binding_infos[ 0 ].binding    = 0;
-	vertex_layout.binding_infos[ 0 ].input_rate = VertexInputRate::eVertex;
+	vertex_layout.binding_infos[ 0 ].input_rate = VertexInputRate::VERTEX;
 	vertex_layout.binding_infos[ 0 ].stride     = 4 * sizeof( float );
 	vertex_layout.attribute_info_count          = 2;
 	vertex_layout.attribute_infos[ 0 ].binding  = 0;
-	vertex_layout.attribute_infos[ 0 ].format   = Format::eR32G32Sfloat;
+	vertex_layout.attribute_infos[ 0 ].format   = Format::R32G32_SFLOAT;
 	vertex_layout.attribute_infos[ 0 ].location = 0;
 	vertex_layout.attribute_infos[ 0 ].offset   = 0;
 	vertex_layout.attribute_infos[ 1 ].binding  = 0;
-	vertex_layout.attribute_infos[ 1 ].format   = Format::eR32G32Sfloat;
+	vertex_layout.attribute_infos[ 1 ].format   = Format::R32G32_SFLOAT;
 	vertex_layout.attribute_infos[ 1 ].location = 1;
 	vertex_layout.attribute_infos[ 1 ].offset   = 2 * sizeof( float );
 	pipeline_info.shader                        = shader;
-	pipeline_info.rasterizer_info.cull_mode     = CullMode::eNone;
-	pipeline_info.rasterizer_info.front_face    = FrontFace::eCounterClockwise;
+	pipeline_info.rasterizer_info.cull_mode     = CullMode::NONE;
+	pipeline_info.rasterizer_info.front_face    = FrontFace::COUNTER_CLOCKWISE;
 	pipeline_info.depth_state_info.depth_test   = false;
 	pipeline_info.depth_state_info.depth_write  = false;
 	pipeline_info.descriptor_set_layout         = descriptor_set_layout;
 	pipeline_info.render_pass                   = render_passes[ 0 ];
+	pipeline_info.topology = PrimitiveTopology::TRIANGLE_LIST;
 
 	create_graphics_pipeline( device, &pipeline_info, &pipeline );
 
 	BufferInfo buffer_info {};
 	buffer_info.size            = sizeof( vertices );
-	buffer_info.descriptor_type = DescriptorType::eVertexBuffer;
+	buffer_info.descriptor_type = DescriptorType::VERTEX_BUFFER;
 
 	create_buffer( device, &buffer_info, &vertex_buffer );
 
@@ -77,7 +78,7 @@ init_sample()
 	                               vertices );
 
 	SamplerInfo sampler_info {};
-	sampler_info.mipmap_mode = SamplerMipmapMode::eLinear;
+	sampler_info.mipmap_mode = SamplerMipmapMode::LINEAR;
 	sampler_info.min_lod     = 0;
 	sampler_info.max_lod     = 1000;
 
@@ -87,7 +88,7 @@ init_sample()
 
 	ImageDescriptor image_descriptor {};
 	image_descriptor.image          = texture;
-	image_descriptor.resource_state = ResourceState::eShaderReadOnly;
+	image_descriptor.resource_state = ResourceState::SHADER_READ_ONLY;
 
 	SamplerDescriptor sampler_descriptor {};
 	sampler_descriptor.sampler = sampler;

@@ -31,7 +31,7 @@ RenderPass** render_passes;
 
 UiContext* ui;
 
-RendererAPI current_api = RendererAPI::eVulkan;
+RendererAPI current_api = RendererAPI::VULKAN;
 std::string api_name    = "Vulkan";
 
 void
@@ -42,9 +42,9 @@ to_api_str( RendererAPI api )
 {
 	switch ( api )
 	{
-	case RendererAPI::eD3D12: return "/d3d12/";
-	case RendererAPI::eVulkan: return "/vulkan/";
-	case RendererAPI::eMetal: return "/metal/";
+	case RendererAPI::D3D12: return "/d3d12/";
+	case RendererAPI::VULKAN: return "/vulkan/";
+	case RendererAPI::METAL: return "/metal/";
 	}
 	return "";
 }
@@ -59,8 +59,8 @@ load_image_from_file( const std::string& filename, b32 flip )
 	                         flip,
 	                         &size,
 	                         &data );
-	image_info.format          = Format::eR8G8B8A8Srgb;
-	image_info.descriptor_type = DescriptorType::eSampledImage;
+	image_info.format          = Format::R8G8B8A8_SRGB;
+	image_info.descriptor_type = DescriptorType::SAMPLED_IMAGE;
 	Image* image;
 	create_image( device, &image_info, &image );
 	ResourceLoader::upload_image( image, size, data );
@@ -75,18 +75,18 @@ create_depth_image( u32 width, u32 height )
 	depth_image_info.width           = width;
 	depth_image_info.height          = height;
 	depth_image_info.depth           = 1;
-	depth_image_info.format          = Format::eD32Sfloat;
+	depth_image_info.format          = Format::D32_SFLOAT;
 	depth_image_info.layer_count     = 1;
 	depth_image_info.mip_levels      = 1;
-	depth_image_info.sample_count    = SampleCount::e1;
-	depth_image_info.descriptor_type = DescriptorType::eDepthStencilAttachment;
+	depth_image_info.sample_count    = SampleCount::E1;
+	depth_image_info.descriptor_type = DescriptorType::DEPTH_STENCIL_ATTACHMENT;
 
 	create_image( device, &depth_image_info, &depth_image );
 
 	ImageBarrier barrier {};
 	barrier.image     = depth_image;
-	barrier.old_state = ResourceState::eUndefined;
-	barrier.new_state = ResourceState::eDepthStencilWrite;
+	barrier.old_state = ResourceState::UNDEFINED;
+	barrier.new_state = ResourceState::DEPTH_STENCIL_WRITE;
 	barrier.src_queue = queue;
 	barrier.dst_queue = queue;
 
@@ -111,7 +111,7 @@ on_init()
 	create_device( backend, &device_info, &device );
 
 	QueueInfo queue_info {};
-	queue_info.queue_type = QueueType::eGraphics;
+	queue_info.queue_type = QueueType::GRAPHICS;
 	create_queue( device, &queue_info, &queue );
 
 	CommandPoolInfo command_pool_info {};
@@ -132,7 +132,7 @@ on_init()
 	SwapchainInfo swapchain_info {};
 	swapchain_info.width           = window_get_width( get_app_window() );
 	swapchain_info.height          = window_get_height( get_app_window() );
-	swapchain_info.format          = Format::eB8G8R8A8Srgb;
+	swapchain_info.format          = Format::B8G8R8A8_SRGB;
 	swapchain_info.vsync           = true;
 	swapchain_info.queue           = queue;
 	swapchain_info.min_image_count = FRAME_COUNT;
@@ -144,10 +144,10 @@ on_init()
 	render_pass_info.width                          = swapchain->width;
 	render_pass_info.height                         = swapchain->height;
 	render_pass_info.color_attachment_count         = 1;
-	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::eClear;
-	render_pass_info.color_image_states[ 0 ] = ResourceState::eColorAttachment;
-	render_pass_info.depth_stencil_state   = ResourceState::eDepthStencilWrite;
-	render_pass_info.depth_stencil_load_op = AttachmentLoadOp::eClear;
+	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::CLEAR;
+	render_pass_info.color_image_states[ 0 ] = ResourceState::COLOR_ATTACHMENT;
+	render_pass_info.depth_stencil_state   = ResourceState::DEPTH_STENCIL_WRITE;
+	render_pass_info.depth_stencil_load_op = AttachmentLoadOp::CLEAR;
 	render_pass_info.depth_stencil         = depth_image;
 
 	render_passes = new RenderPass*[ swapchain->image_count ];
@@ -189,10 +189,10 @@ on_resize( u32 width, u32 height )
 	render_pass_info.width                          = width;
 	render_pass_info.height                         = height;
 	render_pass_info.color_attachment_count         = 1;
-	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::eClear;
-	render_pass_info.color_image_states[ 0 ] = ResourceState::eColorAttachment;
-	render_pass_info.depth_stencil_state   = ResourceState::eDepthStencilWrite;
-	render_pass_info.depth_stencil_load_op = AttachmentLoadOp::eClear;
+	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::CLEAR;
+	render_pass_info.color_image_states[ 0 ] = ResourceState::COLOR_ATTACHMENT;
+	render_pass_info.depth_stencil_state   = ResourceState::DEPTH_STENCIL_WRITE;
+	render_pass_info.depth_stencil_load_op = AttachmentLoadOp::CLEAR;
 	render_pass_info.depth_stencil         = depth_image;
 
 	for ( uint32_t i = 0; i < swapchain->image_count; i++ )
@@ -229,8 +229,8 @@ begin_frame()
 	to_clear_barrier.src_queue = queue;
 	to_clear_barrier.dst_queue = queue;
 	to_clear_barrier.image     = swapchain->images[ image_index ];
-	to_clear_barrier.old_state = ResourceState::eUndefined;
-	to_clear_barrier.new_state = ResourceState::eColorAttachment;
+	to_clear_barrier.old_state = ResourceState::UNDEFINED;
+	to_clear_barrier.new_state = ResourceState::COLOR_ATTACHMENT;
 
 	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &to_clear_barrier );
 
@@ -298,8 +298,8 @@ end_frame( u32 image_index )
 	to_present_barrier.src_queue = queue;
 	to_present_barrier.dst_queue = queue;
 	to_present_barrier.image     = swapchain->images[ image_index ];
-	to_present_barrier.old_state = ResourceState::eColorAttachment;
-	to_present_barrier.new_state = ResourceState::ePresent;
+	to_present_barrier.old_state = ResourceState::COLOR_ATTACHMENT;
+	to_present_barrier.new_state = ResourceState::PRESENT;
 
 	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &to_present_barrier );
 
@@ -374,22 +374,22 @@ api_switch( RendererAPI api )
 {
 	switch ( api )
 	{
-	case RendererAPI::eD3D12:
+	case RendererAPI::D3D12:
 	{
 		api_name    = "D3D12";
-		current_api = RendererAPI::eD3D12;
+		current_api = RendererAPI::D3D12;
 		break;
 	}
-	case RendererAPI::eVulkan:
+	case RendererAPI::VULKAN:
 	{
 		api_name    = "Vulkan";
-		current_api = RendererAPI::eVulkan;
+		current_api = RendererAPI::VULKAN;
 		break;
 	}
-	case RendererAPI::eMetal:
+	case RendererAPI::METAL:
 	{
 		api_name    = "Metal";
-		current_api = RendererAPI::eMetal;
+		current_api = RendererAPI::METAL;
 	}
 	}
 

@@ -25,12 +25,13 @@ init_sample()
 
 	PipelineInfo pipeline_info {};
 	pipeline_info.shader                       = shader;
-	pipeline_info.rasterizer_info.cull_mode    = CullMode::eNone;
-	pipeline_info.rasterizer_info.front_face   = FrontFace::eCounterClockwise;
+	pipeline_info.rasterizer_info.cull_mode    = CullMode::NONE;
+	pipeline_info.rasterizer_info.front_face   = FrontFace::COUNTER_CLOCKWISE;
 	pipeline_info.depth_state_info.depth_test  = false;
 	pipeline_info.depth_state_info.depth_write = false;
 	pipeline_info.descriptor_set_layout        = descriptor_set_layout;
 	pipeline_info.render_pass                  = render_passes[ 0 ];
+	pipeline_info.topology = PrimitiveTopology::TRIANGLE_LIST;
 
 	create_graphics_pipeline( device, &pipeline_info, &pipeline );
 
