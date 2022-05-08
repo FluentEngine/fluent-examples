@@ -145,17 +145,17 @@ load_model( std::vector<Vertex>& vertices, std::vector<u32>& indices )
 			Vertex vertex {};
 
 			vertex.position = { attrib.vertices[ 3 * index.vertex_index + 0 ],
-			                    attrib.vertices[ 3 * index.vertex_index + 1 ],
-			                    attrib.vertices[ 3 * index.vertex_index + 2 ] };
+				                attrib.vertices[ 3 * index.vertex_index + 1 ],
+				                attrib.vertices[ 3 * index.vertex_index + 2 ] };
 
 			vertex.tex_coord = {
-			    attrib.texcoords[ 2 * index.texcoord_index + 0 ],
-			    1.0f - attrib.texcoords[ 2 * index.texcoord_index + 1 ]
+				attrib.texcoords[ 2 * index.texcoord_index + 0 ],
+				1.0f - attrib.texcoords[ 2 * index.texcoord_index + 1 ]
 			};
 
 			vertex.normal = { attrib.normals[ 3 * index.vertex_index + 0 ],
-			                  attrib.normals[ 3 * index.vertex_index + 1 ],
-			                  attrib.normals[ 3 * index.vertex_index + 2 ] };
+				              attrib.normals[ 3 * index.vertex_index + 1 ],
+				              attrib.normals[ 3 * index.vertex_index + 2 ] };
 
 			if ( unique_vertices.count( vertex ) == 0 )
 			{
