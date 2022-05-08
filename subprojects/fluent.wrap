@@ -1,0 +1,7 @@
+[wrap-git]
+url = git@github.com:FluentEngine/fluent.git
+revision = head
+
+[provide]
+fluent_engine = fluent_engine_dep
+
