@@ -5,7 +5,7 @@
 #include "tiny_obj_loader.h"
 #include "render_graph.hpp"
 
-#define RG 0
+#define RG 1
 
 using namespace fluent;
 
@@ -44,21 +44,23 @@ struct Vertex
 	}
 };
 
-namespace std
-{
+template <typename T>
+struct VertexHash;
+
 template <>
-struct hash<Vertex>
+struct VertexHash<Vertex>
 {
 	std::size_t
 	operator()( Vertex const& vertex ) const
 	{
-		return ( ( hash<glm::vec3>()( vertex.position ) ^
-		           ( hash<glm::vec3>()( vertex.normal ) << 1 ) ) >>
-		         1 ) ^
-		       ( hash<glm::vec2>()( vertex.tex_coord ) << 1 );
+		auto p = std::hash<glm::vec3>()( vertex.position );
+		auto n = ( std::hash<glm::vec3>()( vertex.normal ) << 1 );
+		auto t = std::hash<glm::vec2>()( vertex.tex_coord ) << 1;
+		return ( ( p ^ n ) >> 1 ) ^ ( t );
 	}
 };
-} // namespace std
+
+using VertexHasher = VertexHash<Vertex>;
 
 struct Model
 {
@@ -134,7 +136,7 @@ load_model( std::vector<Vertex>& vertices, std::vector<u32>& indices )
 
 	assert( res && "failed to load model" );
 
-	std::unordered_map<Vertex, u32> unique_vertices {};
+	std::unordered_map<Vertex, u32, VertexHasher> unique_vertices {};
 
 	for ( const auto& shape : shapes )
 	{
