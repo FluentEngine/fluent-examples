@@ -910,7 +910,7 @@ main( int argc, char** argv )
 	config.argc        = argc;
 	config.argv        = argv;
 	config.window_info = window_info;
-	config.log_level   = LogLevel::eTrace;
+	config.log_level   = LogLevel::TRACE;
 	config.on_init     = on_init;
 	config.on_update   = on_update;
 	config.on_resize   = on_resize;
