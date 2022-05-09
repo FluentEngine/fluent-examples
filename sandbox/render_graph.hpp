@@ -7,40 +7,61 @@
 namespace fluent::rg
 {
 
-using PassCallback = void ( * )( CommandBuffer* cmd, void* user_data );
+using PassCreateCallback  = void ( * )( RenderPass*, void* user_data );
+using PassExecuteCallback = void ( * )( CommandBuffer*, void* user_data );
+using PassDestroyCallback = void ( * )( void* user_data );
 
 struct GraphPass
 {
-	RenderPass*  pass;
-	PassCallback cb;
-	void*        user_data;
+	RenderPassInfo      info;
+	RenderPassBeginInfo begin_info;
+	RenderPass*         pass;
+	PassCreateCallback  create_callback;
+	PassExecuteCallback execute_callback;
+	PassDestroyCallback destroy_callback;
+	void*               user_data;
 
 	void
 	execute( CommandBuffer* cmd )
 	{
-		if ( cb )
+		if ( execute_callback )
 		{
-			cb( cmd, user_data );
+			execute_callback( cmd, user_data );
 		}
 	}
 
 	void
-	create( const Device* device, const RenderPassInfo& info )
+	set_user_data( void* data )
 	{
-		create_render_pass( device, &info, &pass );
+		this->user_data = data;
 	}
 
 	void
-	destroy( const Device* device )
+	set_create_callback( PassCreateCallback&& callback )
 	{
-		destroy_render_pass( device, pass );
+		this->create_callback = callback;
 	}
 
 	void
-	set_callback( void* user_data, PassCallback&& callback )
+	set_destroy_callback( PassDestroyCallback&& callback )
 	{
-		this->user_data = user_data;
-		cb              = callback;
+		this->destroy_callback = callback;
+	}
+
+	void
+	set_execute_callback( PassExecuteCallback&& callback )
+	{
+		this->execute_callback = callback;
+	}
+
+	void
+	set_color_clear_value( u32 idx, const Vector4& color )
+	{
+		info.color_attachment_count++;
+		begin_info.clear_values[ idx ].color[ 0 ] = color.r;
+		begin_info.clear_values[ idx ].color[ 1 ] = color.g;
+		begin_info.clear_values[ idx ].color[ 2 ] = color.b;
+		begin_info.clear_values[ idx ].color[ 3 ] = color.a;
 	}
 };
 
@@ -86,9 +107,11 @@ class RenderGraph
 private:
 	const Device* device;
 
-	std::unordered_map<u32, GraphPass> passes;
+	std::unordered_map<u32, RenderPass*> passes;
 
-	GraphPass*
+	std::vector<GraphPass> passes_to_execute;
+
+	RenderPass*
 	get_render_pass( const RenderPassInfo& info );
 
 public:
@@ -103,6 +126,9 @@ public:
 
 	void
 	execute( CommandBuffer* cmd, Image* image );
+
+	GraphPass*
+	add_pass( const std::string& name );
 };
 
 } // namespace fluent::rg

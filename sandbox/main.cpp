@@ -10,7 +10,7 @@
 #include "shader_gbuffer.vert.h"
 #include "shader_gbuffer.frag.h"
 
-#define RG 0
+#define RG 1
 
 using namespace fluent;
 
@@ -108,17 +108,25 @@ Pipeline*            model_pipeline;
 DescriptorSetLayout* model_dsl;
 DescriptorSet*       model_set;
 
+#if RG
+struct DefferedShadingPassData
+{
+	Pipeline*            pipeline;
+	DescriptorSetLayout* dsl;
+	DescriptorSet*       set;
+
+	UiContext* ui_context;
+} deffered_shading_pass_data;
+#else
 Pipeline*            deffered_shading_pipeline;
 DescriptorSetLayout* deffered_shading_dsl;
 DescriptorSet*       deffered_shading_set;
-
+#endif
 Camera           camera;
 CameraController camera_controller;
 
 u32   model_count = 0;
 Model models[ MAX_MODEL_COUNT ];
-
-UiContext* ui_context;
 
 rg::RenderGraph render_graph;
 
@@ -139,7 +147,7 @@ load_model( std::vector<Vertex>& vertices, std::vector<u32>& indices )
 	                             &err,
 	                             model_path.c_str() );
 
-	assert( res && "failed to load model" );
+	FT_ASSERT( res && "failed to load model" );
 
 	std::unordered_map<Vertex, u32, VertexHasher> unique_vertices {};
 
@@ -364,81 +372,6 @@ create_gbuffer_pass()
 }
 
 void
-create_deffered_shading_pipeline()
-{
-	Shader* shader;
-
-	ShaderInfo shader_info {};
-	shader_info.vertex.bytecode_size   = sizeof( shader_deffered_shading_vert );
-	shader_info.vertex.bytecode        = shader_deffered_shading_vert;
-	shader_info.fragment.bytecode_size = sizeof( shader_deffered_shading_frag );
-	shader_info.fragment.bytecode      = shader_deffered_shading_frag;
-
-	create_shader( device, &shader_info, &shader );
-
-	create_descriptor_set_layout( device, shader, &deffered_shading_dsl );
-
-	PipelineInfo pipeline_info {};
-	pipeline_info.shader                       = shader;
-	pipeline_info.descriptor_set_layout        = deffered_shading_dsl;
-	pipeline_info.render_pass                  = render_passes[ 0 ];
-	pipeline_info.rasterizer_info.cull_mode    = CullMode::NONE;
-	pipeline_info.rasterizer_info.polygon_mode = PolygonMode::FILL;
-	pipeline_info.topology = PrimitiveTopology::TRIANGLE_STRIP;
-
-	create_graphics_pipeline( device,
-	                          &pipeline_info,
-	                          &deffered_shading_pipeline );
-
-	DescriptorSetInfo set_info {};
-	set_info.set                   = 0;
-	set_info.descriptor_set_layout = deffered_shading_dsl;
-	create_descriptor_set( device, &set_info, &deffered_shading_set );
-
-	destroy_shader( device, shader );
-}
-
-void
-update_deffered_shading_set()
-{
-	SamplerDescriptor sampler_descriptor {};
-	sampler_descriptor.sampler = sampler;
-	ImageDescriptor position_descriptor {};
-	position_descriptor.image          = position_image;
-	position_descriptor.resource_state = ResourceState::SHADER_READ_ONLY;
-	ImageDescriptor normal_descriptor {};
-	normal_descriptor.image          = normal_image;
-	normal_descriptor.resource_state = ResourceState::SHADER_READ_ONLY;
-	ImageDescriptor albedo_spec_descriptor {};
-	albedo_spec_descriptor.image          = albedo_spec_image;
-	albedo_spec_descriptor.resource_state = ResourceState::SHADER_READ_ONLY;
-
-	DescriptorWrite descriptor_writes[ 4 ]     = {};
-	descriptor_writes[ 0 ].descriptor_name     = "u_sampler";
-	descriptor_writes[ 0 ].descriptor_count    = 1;
-	descriptor_writes[ 0 ].sampler_descriptors = &sampler_descriptor;
-	descriptor_writes[ 1 ].descriptor_name     = "u_position";
-	descriptor_writes[ 1 ].descriptor_count    = 1;
-	descriptor_writes[ 1 ].image_descriptors   = &position_descriptor;
-	descriptor_writes[ 2 ].descriptor_name     = "u_normal";
-	descriptor_writes[ 2 ].descriptor_count    = 1;
-	descriptor_writes[ 3 ].descriptor_name     = "u_albedo_spec";
-	descriptor_writes[ 2 ].image_descriptors   = &normal_descriptor;
-	descriptor_writes[ 3 ].descriptor_count    = 1;
-	descriptor_writes[ 3 ].image_descriptors   = &albedo_spec_descriptor;
-
-	update_descriptor_set( device, deffered_shading_set, 4, descriptor_writes );
-}
-
-void
-destroy_deffered_shading_pipeline()
-{
-	destroy_descriptor_set( device, deffered_shading_set );
-	destroy_pipeline( device, deffered_shading_pipeline );
-	destroy_descriptor_set_layout( device, deffered_shading_dsl );
-}
-
-void
 draw_models()
 {
 	auto* shader_data = static_cast<ShaderData*>(
@@ -471,26 +404,6 @@ draw_models()
 		                  m.first_vertex,
 		                  1 );
 	}
-}
-
-void
-draw_fullscreen_quad()
-{
-	CommandBuffer* cmd = frames[ frame_index ].cmd;
-	cmd_set_viewport( cmd,
-	                  0,
-	                  0,
-	                  swapchain->width,
-	                  swapchain->height,
-	                  0.0f,
-	                  1.0f );
-	cmd_set_scissor( cmd, 0, 0, swapchain->width, swapchain->height );
-	cmd_bind_pipeline( cmd, deffered_shading_pipeline );
-	cmd_bind_descriptor_set( cmd,
-	                         0,
-	                         deffered_shading_set,
-	                         deffered_shading_pipeline );
-	cmd_draw( cmd, 4, 1, 0, 0 );
 }
 
 void
@@ -544,54 +457,6 @@ execute_gbuffer_pass()
 }
 
 void
-draw_debug_ui()
-{
-	CommandBuffer* cmd = frames[ frame_index ].cmd;
-	ui_begin_frame( ui_context, cmd );
-	ImGui::Begin( "gbuffer" );
-	ImGui::Text( "position" );
-	ImGui::Image( get_imgui_texture_id( position_image ), ImVec2( 200, 200 ) );
-	ImGui::Text( "normal" );
-	ImGui::Image( get_imgui_texture_id( normal_image ), ImVec2( 200, 200 ) );
-	ImGui::Text( "albedo_spec" );
-	ImGui::Image( get_imgui_texture_id( albedo_spec_image ),
-	              ImVec2( 200, 200 ) );
-	ImGui::End();
-	ui_end_frame( ui_context, cmd );
-}
-
-void
-execute_deffered_shading_pass( u32 image_index )
-{
-	CommandBuffer* cmd = frames[ frame_index ].cmd;
-
-	ImageBarrier barrier;
-	barrier.src_queue = graphics_queue;
-	barrier.dst_queue = graphics_queue;
-	barrier.old_state = ResourceState::UNDEFINED;
-	barrier.new_state = ResourceState::COLOR_ATTACHMENT;
-	barrier.image     = swapchain->images[ image_index ];
-
-	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
-
-	RenderPassBeginInfo pass_begin_info {};
-	pass_begin_info.render_pass                  = render_passes[ image_index ];
-	pass_begin_info.clear_values[ 0 ].color[ 0 ] = 0.2f;
-	pass_begin_info.clear_values[ 0 ].color[ 1 ] = 0.3f;
-	pass_begin_info.clear_values[ 0 ].color[ 2 ] = 0.4f;
-	pass_begin_info.clear_values[ 0 ].color[ 3 ] = 1.0f;
-
-	cmd_begin_render_pass( cmd, &pass_begin_info );
-	draw_fullscreen_quad();
-	draw_debug_ui();
-	cmd_end_render_pass( cmd );
-
-	barrier.old_state = ResourceState::COLOR_ATTACHMENT;
-	barrier.new_state = ResourceState::PRESENT;
-	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
-}
-
-void
 on_init()
 {
 	fs::set_shaders_directory( "shaders/sandbox/" );
@@ -635,26 +500,7 @@ on_init()
 	swapchain_info.queue           = graphics_queue;
 	create_swapchain( device, &swapchain_info, &swapchain );
 
-#if RG
-	render_graph.init( device );
-	render_graph.build();
-#else
 	create_depth_image();
-
-	RenderPassInfo render_pass_info {};
-	render_pass_info.width                          = swapchain->width;
-	render_pass_info.height                         = swapchain->height;
-	render_pass_info.color_attachment_count         = 1;
-	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::CLEAR;
-	render_pass_info.color_image_states[ 0 ] = ResourceState::COLOR_ATTACHMENT;
-
-	render_passes = new RenderPass*[ swapchain->image_count ];
-
-	for ( u32 i = 0; i < swapchain->image_count; i++ )
-	{
-		render_pass_info.color_attachments[ 0 ] = swapchain->images[ i ];
-		create_render_pass( device, &render_pass_info, &render_passes[ i ] );
-	}
 
 	ResourceLoader::init( device, 30 * 1024 * 1024 * 8 );
 
@@ -705,6 +551,126 @@ on_init()
 	vertex_buffer_offset += vertices.size() * sizeof( vertices[ 0 ] );
 	index_buffer_offset += indices.size() * sizeof( indices[ 0 ] );
 
+	create_default_sampler();
+	create_attachment_images();
+	create_gbuffer_pass();
+
+	create_ubo_buffer();
+	create_model_pipeline();
+
+	render_graph.init( device );
+
+	auto* pass = render_graph.add_pass( "deffered_shading" );
+	pass->set_color_clear_value( 0, Vector4( 0.2, 0.3, 0.4, 1.0 ) );
+	pass->set_user_data( &deffered_shading_pass_data );
+	pass->set_create_callback(
+	    []( RenderPass* render_pass, void* user_data )
+	    {
+		    auto* data = static_cast<DefferedShadingPassData*>( user_data );
+
+		    // TODO:
+		    if ( data->pipeline )
+		    {
+			    return;
+		    }
+
+		    Shader* shader;
+
+		    ShaderInfo shader_info {};
+		    shader_info.vertex.bytecode_size =
+		        sizeof( shader_deffered_shading_vert );
+		    shader_info.vertex.bytecode = shader_deffered_shading_vert;
+		    shader_info.fragment.bytecode_size =
+		        sizeof( shader_deffered_shading_frag );
+		    shader_info.fragment.bytecode = shader_deffered_shading_frag;
+
+		    create_shader( device, &shader_info, &shader );
+
+		    create_descriptor_set_layout( device, shader, &data->dsl );
+
+		    PipelineInfo pipeline_info {};
+		    pipeline_info.shader                       = shader;
+		    pipeline_info.descriptor_set_layout        = data->dsl;
+		    pipeline_info.render_pass                  = render_pass;
+		    pipeline_info.rasterizer_info.cull_mode    = CullMode::NONE;
+		    pipeline_info.rasterizer_info.polygon_mode = PolygonMode::FILL;
+		    pipeline_info.topology = PrimitiveTopology::TRIANGLE_STRIP;
+
+		    create_graphics_pipeline( device, &pipeline_info, &data->pipeline );
+
+		    DescriptorSetInfo set_info {};
+		    set_info.set                   = 0;
+		    set_info.descriptor_set_layout = data->dsl;
+		    create_descriptor_set( device, &set_info, &data->set );
+
+		    destroy_shader( device, shader );
+
+		    // update sets
+
+		    SamplerDescriptor sampler_descriptor {};
+		    sampler_descriptor.sampler = sampler;
+		    ImageDescriptor position_descriptor {};
+		    position_descriptor.image = position_image;
+		    position_descriptor.resource_state =
+		        ResourceState::SHADER_READ_ONLY;
+		    ImageDescriptor normal_descriptor {};
+		    normal_descriptor.image          = normal_image;
+		    normal_descriptor.resource_state = ResourceState::SHADER_READ_ONLY;
+		    ImageDescriptor albedo_spec_descriptor {};
+		    albedo_spec_descriptor.image = albedo_spec_image;
+		    albedo_spec_descriptor.resource_state =
+		        ResourceState::SHADER_READ_ONLY;
+
+		    DescriptorWrite descriptor_writes[ 4 ]     = {};
+		    descriptor_writes[ 0 ].descriptor_name     = "u_sampler";
+		    descriptor_writes[ 0 ].descriptor_count    = 1;
+		    descriptor_writes[ 0 ].sampler_descriptors = &sampler_descriptor;
+		    descriptor_writes[ 1 ].descriptor_name     = "u_position";
+		    descriptor_writes[ 1 ].descriptor_count    = 1;
+		    descriptor_writes[ 1 ].image_descriptors   = &position_descriptor;
+		    descriptor_writes[ 2 ].descriptor_name     = "u_normal";
+		    descriptor_writes[ 2 ].descriptor_count    = 1;
+		    descriptor_writes[ 3 ].descriptor_name     = "u_albedo_spec";
+		    descriptor_writes[ 2 ].image_descriptors   = &normal_descriptor;
+		    descriptor_writes[ 3 ].descriptor_count    = 1;
+		    descriptor_writes[ 3 ].image_descriptors = &albedo_spec_descriptor;
+
+		    update_descriptor_set( device, data->set, 4, descriptor_writes );
+	    } );
+
+	pass->set_execute_callback(
+	    []( CommandBuffer* cmd, void* user_data )
+	    {
+		    auto* data = static_cast<DefferedShadingPassData*>( user_data );
+
+		    cmd_set_viewport( cmd,
+		                      0,
+		                      0,
+		                      swapchain->width,
+		                      swapchain->height,
+		                      0.0f,
+		                      1.0f );
+		    cmd_set_scissor( cmd, 0, 0, swapchain->width, swapchain->height );
+		    cmd_bind_pipeline( cmd, data->pipeline );
+		    cmd_bind_descriptor_set( cmd, 0, data->set, data->pipeline );
+		    cmd_draw( cmd, 4, 1, 0, 0 );
+	    } );
+
+	pass->set_destroy_callback(
+	    []( void* user_data )
+	    {
+		    auto* data = static_cast<DefferedShadingPassData*>( user_data );
+		    // TODO
+		    if ( data->pipeline == nullptr )
+		    {
+			    return;
+		    }
+		    destroy_descriptor_set( device, data->set );
+		    destroy_pipeline( device, data->pipeline );
+		    destroy_descriptor_set_layout( device, data->dsl );
+	    } );
+	render_graph.build();
+
 	CameraInfo camera_info {};
 	camera_info.aspect      = window_get_aspect( get_app_window() );
 	camera_info.near        = 0.1f;
@@ -717,28 +683,6 @@ on_init()
 
 	camera.init_camera( camera_info );
 	camera_controller.init( camera );
-
-	create_default_sampler();
-	create_attachment_images();
-	create_gbuffer_pass();
-
-	create_ubo_buffer();
-	create_model_pipeline();
-	create_deffered_shading_pipeline();
-	update_deffered_shading_set();
-
-	UiInfo ui_info {};
-	ui_info.backend            = backend;
-	ui_info.device             = device;
-	ui_info.min_image_count    = swapchain->min_image_count;
-	ui_info.image_count        = swapchain->image_count;
-	ui_info.in_fly_frame_count = FRAME_COUNT;
-	ui_info.queue              = graphics_queue;
-	ui_info.render_pass        = render_passes[ 0 ];
-	ui_info.window             = get_app_window();
-
-	create_ui_context( frames[ 0 ].cmd, &ui_info, &ui_context );
-#endif
 }
 
 void
@@ -764,18 +708,12 @@ on_update( f32 delta_time )
 	                    &image_index );
 
 	CommandBuffer* cmd = frames[ frame_index ].cmd;
-#if RG
+
 	begin_command_buffer( cmd );
+	execute_gbuffer_pass();
 	render_graph.execute( cmd, swapchain->images[ image_index ] );
 	end_command_buffer( cmd );
-#else
-	begin_command_buffer( cmd );
 
-	execute_gbuffer_pass();
-	execute_deffered_shading_pass( image_index );
-
-	end_command_buffer( cmd );
-#endif
 	QueueSubmitInfo submit_info {};
 	submit_info.wait_semaphore_count = 1;
 	submit_info.wait_semaphores      = &frames[ frame_index ].present_semaphore;
@@ -803,48 +741,16 @@ on_update( f32 delta_time )
 void
 on_resize( u32 width, u32 height )
 {
-#if RG
-#else
-	queue_wait_idle( graphics_queue );
-	resize_swapchain( device, swapchain, width, height );
-
-	destroy_image( device, depth_image );
-	create_depth_image();
-	destroy_image( device, position_image );
-	destroy_image( device, normal_image );
-	destroy_image( device, albedo_spec_image );
-
-	create_attachment_images();
-	update_deffered_shading_set();
-
-	RenderPassInfo render_pass_info {};
-	render_pass_info.width                          = width;
-	render_pass_info.height                         = height;
-	render_pass_info.color_attachment_count         = 1;
-	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::CLEAR;
-	render_pass_info.color_image_states[ 0 ] = ResourceState::COLOR_ATTACHMENT;
-
-	for ( u32 i = 0; i < swapchain->image_count; i++ )
-	{
-		render_pass_info.color_attachments[ 0 ] = swapchain->images[ i ];
-		resize_render_pass( device, render_passes[ i ], &render_pass_info );
-	}
-
-	render_pass_info = gbuffer_pass_info();
-	resize_render_pass( device, gbuffer_pass, &render_pass_info );
-#endif
+	// TODO:
 }
 
 void
 on_shutdown()
 {
 	queue_wait_idle( graphics_queue );
-#if RG
-	render_graph.shutdown();
-#else
-	destroy_ui_context( device, ui_context );
 
-	destroy_deffered_shading_pipeline();
+	render_graph.shutdown();
+
 	destroy_model_pipeline();
 
 	destroy_buffer( device, ubo_buffer );
@@ -855,11 +761,6 @@ on_shutdown()
 
 	ResourceLoader::shutdown();
 
-	for ( u32 i = 0; i < swapchain->image_count; ++i )
-	{
-		destroy_render_pass( device, render_passes[ i ] );
-	}
-
 	destroy_render_pass( device, gbuffer_pass );
 	destroy_image( device, albedo_spec_image );
 	destroy_image( device, normal_image );
@@ -867,7 +768,7 @@ on_shutdown()
 	destroy_sampler( device, sampler );
 
 	destroy_image( device, depth_image );
-#endif
+
 	destroy_swapchain( device, swapchain );
 
 	for ( u32 i = 0; i < FRAME_COUNT; i++ )

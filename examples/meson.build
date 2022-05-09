@@ -30,7 +30,7 @@ foreach example : examples
     if example in shaders
         compiled_shaders = ft_shader_gen.process(shaders[example])
     endif
-
+    
     executable(example, srcs, compiled_shaders,
         dependencies	: fluent_engine_dep,
         cpp_args		: compile_args,
