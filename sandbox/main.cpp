@@ -5,6 +5,11 @@
 #include "tiny_obj_loader.h"
 #include "render_graph.hpp"
 
+#include "shader_deffered_shading.vert.h"
+#include "shader_deffered_shading.frag.h"
+#include "shader_gbuffer.vert.h"
+#include "shader_gbuffer.frag.h"
+
 #define RG 0
 
 using namespace fluent;
@@ -185,16 +190,11 @@ create_model_pipeline()
 {
 	Shader* shader;
 
-	auto vert_code = read_shader( "gbuffer.vert" );
-	auto frag_code = read_shader( "gbuffer.frag" );
-
 	ShaderInfo shader_info {};
-	shader_info.vertex.bytecode_size =
-	    vert_code.size() * sizeof( vert_code[ 0 ] );
-	shader_info.vertex.bytecode = vert_code.data();
-	shader_info.fragment.bytecode_size =
-	    frag_code.size() * sizeof( frag_code[ 0 ] );
-	shader_info.fragment.bytecode = frag_code.data();
+	shader_info.vertex.bytecode_size   = sizeof( shader_gbuffer_vert );
+	shader_info.vertex.bytecode        = shader_gbuffer_vert;
+	shader_info.fragment.bytecode_size = sizeof( shader_gbuffer_frag );
+	shader_info.fragment.bytecode      = shader_gbuffer_frag;
 
 	create_shader( device, &shader_info, &shader );
 
@@ -368,16 +368,11 @@ create_deffered_shading_pipeline()
 {
 	Shader* shader;
 
-	auto vert_code = read_shader( "deffered_shading.vert" );
-	auto frag_code = read_shader( "deffered_shading.frag" );
-
 	ShaderInfo shader_info {};
-	shader_info.vertex.bytecode_size =
-	    vert_code.size() * sizeof( vert_code[ 0 ] );
-	shader_info.vertex.bytecode = vert_code.data();
-	shader_info.fragment.bytecode_size =
-	    frag_code.size() * sizeof( frag_code[ 0 ] );
-	shader_info.fragment.bytecode = frag_code.data();
+	shader_info.vertex.bytecode_size   = sizeof( shader_deffered_shading_vert );
+	shader_info.vertex.bytecode        = shader_deffered_shading_vert;
+	shader_info.fragment.bytecode_size = sizeof( shader_deffered_shading_frag );
+	shader_info.fragment.bytecode      = shader_deffered_shading_frag;
 
 	create_shader( device, &shader_info, &shader );
 
@@ -600,8 +595,8 @@ void
 on_init()
 {
 	fs::set_shaders_directory( "shaders/sandbox/" );
-	fs::set_textures_directory( "../sandbox/" );
-	fs::set_models_directory( "../sandbox/" );
+	fs::set_textures_directory( "../../sandbox/" );
+	fs::set_models_directory( "../../sandbox/" );
 
 	RendererBackendInfo backend_info {};
 	backend_info.api = RendererAPI::VULKAN;

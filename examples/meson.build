@@ -7,15 +7,15 @@ examples = [
 
 shaders = {
     examples[1] : files([
-        'shaders/01_hello_triangle/main.vert.hlsl',
-        'shaders/01_hello_triangle/main.frag.hlsl',
+        'shaders/01_hello_triangle/main.vert.ft',
+        'shaders/01_hello_triangle/main.frag.ft',
     ]),
     examples[2] : files([
-        'shaders/02_load_texture/main.vert.hlsl',
-        'shaders/02_load_texture/main.frag.hlsl',
+        'shaders/02_load_texture/main.vert.ft',
+        'shaders/02_load_texture/main.frag.ft',
     ]),
     examples[3] : files([
-        'shaders/03_compute/main.comp.hlsl'
+        'shaders/03_compute/main.comp.ft'
     ])
 }
 
@@ -27,13 +27,8 @@ foreach example : examples
 
     compiled_shaders = []
 
-    shader_generator = generator(prog_python,
-      output        : [ '@BASENAME@.bin' ],
-      arguments     : [ meson.current_source_dir()/'../tools/compile_shaders.py', '--outdir', meson.current_source_dir()/'../build'/'shaders'/example, '--bytecodes', bytecodes, '--shader', '@INPUT@' ]
-    )
-
     if example in shaders
-        compiled_shaders = shader_generator.process(shaders[example])
+        compiled_shaders = ft_shader_gen.process(shaders[example])
     endif
 
     executable(example, srcs, compiled_shaders,

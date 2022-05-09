@@ -1,5 +1,6 @@
 #define SAMPLE_NAME "03_compute"
 #include "../common/sample.hpp"
+#include "shader_main.comp.h"
 
 struct Vertex
 {
@@ -64,12 +65,9 @@ create_output_texture()
 void
 init_sample()
 {
-	auto comp_code = read_shader( "main.comp" );
-
 	ShaderInfo shader_info {};
-	shader_info.compute.bytecode_size =
-	    comp_code.size() * sizeof( comp_code[ 0 ] );
-	shader_info.compute.bytecode = comp_code.data();
+	shader_info.compute.bytecode_size = sizeof( shader_main_comp );
+	shader_info.compute.bytecode      = shader_main_comp;
 
 	Shader* shader;
 	create_shader( device, &shader_info, &shader );

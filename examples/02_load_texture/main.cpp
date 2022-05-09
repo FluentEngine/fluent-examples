@@ -1,6 +1,9 @@
 #define SAMPLE_NAME "02_load_texture"
 #include "../common/sample.hpp"
 
+#include "shader_main.vert.h"
+#include "shader_main.frag.h"
+
 DescriptorSetLayout* descriptor_set_layout;
 Pipeline*            pipeline;
 
@@ -24,16 +27,11 @@ Image*         texture;
 void
 init_sample()
 {
-	auto vert_code = read_shader( "main.vert" );
-	auto frag_code = read_shader( "main.frag" );
-
 	ShaderInfo shader_info {};
-	shader_info.vertex.bytecode = vert_code.data();
-	shader_info.vertex.bytecode_size =
-	    vert_code.size() * sizeof( vert_code[ 0 ] );
-	shader_info.fragment.bytecode = frag_code.data();
-	shader_info.fragment.bytecode_size =
-	    frag_code.size() * sizeof( frag_code[ 0 ] );
+	shader_info.vertex.bytecode_size   = sizeof( shader_main_vert );
+	shader_info.vertex.bytecode        = shader_main_vert;
+	shader_info.fragment.bytecode_size = sizeof( shader_main_frag );
+	shader_info.fragment.bytecode      = shader_main_frag;
 
 	Shader* shader;
 	create_shader( device, &shader_info, &shader );
