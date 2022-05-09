@@ -32,7 +32,7 @@ ft_shader_args = [
     meson.current_source_dir()/'tools/compile_shaders.py',
 	'--input', '@INPUT@',
 	'--output', '@OUTPUT@',
-	'--bytecodes', 'spirv'
+	'--bytecodes', bytecodes
 ]
 
 ft_shader_gen = generator(

@@ -24,7 +24,6 @@ if __name__ == "__main__":
 		if bytecode == 'dxil':
 			dxil = 1
 		if bytecode == 'msl':
-			spirv = 1
 			msl = 1
 
 	if spirv:
@@ -62,14 +61,24 @@ if __name__ == "__main__":
 						output_shader_name, shader_name])
 
 	if msl:
-		if not os.path.exists(args.outdir + '/metal'):
-			os.mkdir(args.outdir + '/metal')
+		stage = ''
+		if 'vert' in args.input:
+			stage = 'vert'
+		elif 'frag' in args.input:
+			stage = 'frag'
+		elif 'comp' in args.input:
+			stage = 'comp'
 
-		shader_name = args.shader
-		output_shader_name = args.outdir + '/metal/' + \
-		os.path.basename(shader_name).replace('hlsl', 'bin')
+		spv = args.output.replace('.h', '.spv')
+		
+		subprocess.call(['glslangValidator', '-S', stage, '-D', '-e', 'main', '-V', '-I' + current_dir,
+				args.input, '-o',  spv ])
 
-		subprocess.call(['spirv-cross', args.outdir + '/vulkan/' + os.path.basename(shader_name).replace('hlsl', 'bin'), '--msl', '--output', output_shader_name.replace('bin', 'metal')])
-		subprocess.call([ 'xcrun', '-sdk', 'macosx', 'metal', '-c', output_shader_name.replace('bin', 'metal'), '-o', output_shader_name.replace('bin', 'air')])
-		subprocess.call([ 'xcrun', '-sdk', 'macosx', 'metallib', output_shader_name.replace('bin', 'air'), '-o', output_shader_name ])
+		subprocess.call(['spirv-cross', spv, '--msl', '--output', spv.replace('.spv', '.metal')])
+		subprocess.call([ 'xcrun', '-sdk', 'macosx', 'metal', '-c', spv.replace('.spv', '.metal'), '-o', spv.replace('.spv', '.air')])
+		subprocess.call([ 'xcrun', '-sdk', 'macosx', 'metallib', spv.replace('.spv', '.air'), '-o', spv.replace('.spv', '') ])
+		print('xxd' + '-i' + spv.replace('.spv', '') + '>' + spv.replace('.' + stage + '.spv', '.h'))
+		f = open(spv.replace('.spv', '.h'), 'w')
+		os.chdir(os.path.dirname(spv.replace('.spv', '')))
+		subprocess.call([ 'xxd', '-i', os.path.basename(spv.replace('.spv', '')) ], stdout=f)
 
