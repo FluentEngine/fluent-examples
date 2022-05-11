@@ -63,6 +63,14 @@ struct GraphPass
 		begin_info.clear_values[ idx ].color[ 2 ] = color.b;
 		begin_info.clear_values[ idx ].color[ 3 ] = color.a;
 	}
+
+	void
+	set_depth_clear_value( f32 depth, u32 stencil )
+	{
+		// TODO: this is not correct
+		begin_info.clear_values[ info.color_attachment_count ].depth   = 1.0f;
+		begin_info.clear_values[ info.color_attachment_count ].stencil = 0;
+	}
 };
 
 template <class T>
@@ -102,19 +110,19 @@ struct PassHash<GraphPass>
 
 using GraphPassHasher = PassHash<GraphPass>;
 
-class RenderGraph
+struct RenderGraph
 {
-private:
 	const Device* device;
 
 	std::unordered_map<u32, RenderPass*> passes;
 
+	std::vector<Image*>    color_outputs;
+	std::vector<Image*>    depth_outputs;
 	std::vector<GraphPass> passes_to_execute;
 
 	RenderPass*
 	get_render_pass( const RenderPassInfo& info );
 
-public:
 	void
 	init( const Device* device );
 
@@ -122,7 +130,7 @@ public:
 	shutdown();
 
 	void
-	build();
+	build( Queue* queue, CommandBuffer* cmd );
 
 	void
 	execute( CommandBuffer* cmd, Image* image );

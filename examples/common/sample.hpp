@@ -160,17 +160,47 @@ on_init()
 
 	ResourceLoader::init( device, 25 * 1024 * 1024 * 8 );
 
-	UiInfo ui_info {};
-	ui_info.backend            = backend;
-	ui_info.device             = device;
-	ui_info.min_image_count    = swapchain->min_image_count;
-	ui_info.image_count        = swapchain->image_count;
-	ui_info.in_fly_frame_count = FRAME_COUNT;
-	ui_info.queue              = queue;
-	ui_info.render_pass        = render_passes[ 0 ];
-	ui_info.window             = get_app_window();
+	ImageInfo color_image_info {};
+	color_image_info.width           = swapchain->width;
+	color_image_info.height          = swapchain->height;
+	color_image_info.depth           = swapchain->images[ 0 ]->depth;
+	color_image_info.descriptor_type = swapchain->images[ 0 ]->descriptor_type;
+	color_image_info.format          = swapchain->images[ 0 ]->format;
+	color_image_info.mip_levels      = swapchain->images[ 0 ]->mip_level_count;
+	color_image_info.sample_count    = swapchain->images[ 0 ]->sample_count;
 
-	create_ui_context( command_buffers[ 0 ], &ui_info, &ui );
+	ImageInfo depth_image_info {};
+	depth_image_info.width           = swapchain->width;
+	depth_image_info.height          = swapchain->height;
+	depth_image_info.depth           = 1;
+	depth_image_info.format          = Format::D32_SFLOAT;
+	depth_image_info.layer_count     = 1;
+	depth_image_info.mip_levels      = 1;
+	depth_image_info.sample_count    = SampleCount::E1;
+	depth_image_info.descriptor_type = DescriptorType::DEPTH_STENCIL_ATTACHMENT;
+
+	UiInfo ui_info {};
+	ui_info.backend               = backend;
+	ui_info.device                = device;
+	ui_info.min_image_count       = swapchain->min_image_count;
+	ui_info.image_count           = swapchain->image_count;
+	ui_info.in_fly_frame_count    = FRAME_COUNT;
+	ui_info.queue                 = queue;
+	ui_info.color_attachment_info = &color_image_info;
+	ui_info.color_load_op         = AttachmentLoadOp::CLEAR;
+	ui_info.color_state           = ResourceState::COLOR_ATTACHMENT;
+	ui_info.depth_attachment_info = &depth_image_info;
+	ui_info.depth_load_op         = AttachmentLoadOp::CLEAR;
+	ui_info.depth_state           = ResourceState::DEPTH_STENCIL_WRITE;
+	ui_info.window                = get_app_window();
+
+	init_ui( &ui_info );
+
+	begin_command_buffer( command_buffers[ 0 ] );
+	ui_upload_resources( command_buffers[ 0 ] );
+	end_command_buffer( command_buffers[ 0 ] );
+	immediate_submit( queue, command_buffers[ 0 ] );
+	ui_destroy_upload_objects();
 
 	init_sample();
 }
@@ -259,7 +289,7 @@ end_frame( u32 image_index )
 {
 	auto& cmd = command_buffers[ frame_index ];
 
-	ui_begin_frame( ui, cmd );
+	ui_begin_frame( cmd );
 
 	ImGuiStyle* style              = &ImGui::GetStyle();
 	auto        old_color          = style->Colors[ ImGuiCol_Text ];
@@ -291,7 +321,7 @@ end_frame( u32 image_index )
 
 	style->Colors[ ImGuiCol_Text ] = old_color;
 
-	ui_end_frame( ui, cmd );
+	ui_end_frame( cmd );
 	cmd_end_render_pass( cmd );
 
 	ImageBarrier to_present_barrier {};
@@ -343,7 +373,7 @@ on_shutdown()
 {
 	queue_wait_idle( queue );
 	shutdown_sample();
-	destroy_ui_context( device, ui );
+	shutdown_ui( device );
 	ResourceLoader::shutdown();
 	destroy_image( device, depth_image );
 	for ( uint32_t i = 0; i < swapchain->image_count; i++ )
