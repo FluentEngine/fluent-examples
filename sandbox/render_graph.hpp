@@ -7,136 +7,71 @@
 namespace fluent::rg
 {
 
-using PassCreateCallback  = void ( * )( RenderPass*, void* user_data );
-using PassExecuteCallback = void ( * )( CommandBuffer*, void* user_data );
-using PassDestroyCallback = void ( * )( void* user_data );
+struct RenderGraph;
 
-struct GraphPass
+struct RenderGraphImage
 {
-	RenderPassInfo      info;
-	RenderPassBeginInfo begin_info;
-	RenderPass*         pass;
-	PassCreateCallback  create_callback;
-	PassExecuteCallback execute_callback;
-	PassDestroyCallback destroy_callback;
-	void*               user_data;
-
-	void
-	execute( CommandBuffer* cmd )
-	{
-		if ( execute_callback )
-		{
-			execute_callback( cmd, user_data );
-		}
-	}
-
-	void
-	set_user_data( void* data )
-	{
-		this->user_data = data;
-	}
-
-	void
-	set_create_callback( PassCreateCallback&& callback )
-	{
-		this->create_callback = callback;
-	}
-
-	void
-	set_destroy_callback( PassDestroyCallback&& callback )
-	{
-		this->destroy_callback = callback;
-	}
-
-	void
-	set_execute_callback( PassExecuteCallback&& callback )
-	{
-		this->execute_callback = callback;
-	}
-
-	void
-	set_color_clear_value( u32 idx, const Vector4& color )
-	{
-		info.color_attachment_count++;
-		begin_info.clear_values[ idx ].color[ 0 ] = color.r;
-		begin_info.clear_values[ idx ].color[ 1 ] = color.g;
-		begin_info.clear_values[ idx ].color[ 2 ] = color.b;
-		begin_info.clear_values[ idx ].color[ 3 ] = color.a;
-	}
-
-	void
-	set_depth_clear_value( f32 depth, u32 stencil )
-	{
-		// TODO: this is not correct
-		begin_info.clear_values[ info.color_attachment_count ].depth   = 1.0f;
-		begin_info.clear_values[ info.color_attachment_count ].stencil = 0;
-	}
+	ImageInfo info;
+	u32       index;
 };
 
-template <class T>
-inline void
-hash_combine( std::size_t& s, const T& v )
-{
-	std::hash<T> h;
-	s ^= h( v ) + 0x9e3779b9 + ( s << 6 ) + ( s >> 2 );
-}
+using GetClearColorCallback = bool ( * )( u32              idx,
+                                          ColorClearValue* clear_values );
 
-template <class T>
-struct PassHash;
-
-template <>
-struct PassHash<GraphPass>
+struct RenderGraphPass
 {
-	std::size_t
-	operator()( RenderPassInfo const& info ) const
+	RenderGraph* graph;
+
+	GetClearColorCallback get_color_clear_value;
+
+	std::vector<RenderGraphImage*> color_outputs;
+
+	void
+	add_color_output( std::string const& name, ImageInfo const& info );
+
+	void
+	set_get_clear_color( GetClearColorCallback&& cb )
 	{
-		std::size_t res = 0;
-		hash_combine( res, info.color_attachment_count );
-		hash_combine( res, info.width );
-		hash_combine( res, info.height );
-		for ( u32 i = 0; i < info.color_attachment_count; ++i )
-		{
-			hash_combine( res, info.color_attachment_load_ops[ i ] );
-			hash_combine( res, info.color_image_states[ i ] );
-			hash_combine( res, info.color_attachments[ i ] );
-		}
-		hash_combine( res, info.depth_stencil );
-		hash_combine( res, info.depth_stencil_load_op );
-		hash_combine( res, info.depth_stencil_state );
-
-		return res;
+		get_color_clear_value = cb;
 	}
 };
-
-using GraphPassHasher = PassHash<GraphPass>;
 
 struct RenderGraph
 {
-	const Device* device;
+	Device const*                        device;
+	std::string                          backbuffer_source_name;
+	std::unordered_map<std::string, u32> pass_name_to_index;
+	std::unordered_map<std::string, u32> image_name_to_index;
 
-	std::unordered_map<u32, RenderPass*> passes;
+	std::vector<RenderGraphImage> images;
+	std::vector<RenderGraphPass>  passes;
 
-	std::vector<Image*>    color_outputs;
-	std::vector<Image*>    depth_outputs;
-	std::vector<GraphPass> passes_to_execute;
+	std::vector<RenderPassBeginInfo> pass_infos;
 
-	RenderPass*
-	get_render_pass( const RenderPassInfo& info );
+	RenderGraphImage*
+	get_image( std::string const& name );
+	// public:
 
 	void
-	init( const Device* device );
+	init( Device const* device );
 
 	void
 	shutdown();
 
-	void
-	build( Queue* queue, CommandBuffer* cmd );
+	RenderGraphPass*
+	add_pass( std::string const& name );
 
 	void
-	execute( CommandBuffer* cmd, Image* image );
+	set_backbuffer_source( std::string const& name );
 
-	GraphPass*
-	add_pass( const std::string& name );
+	void
+	build();
+
+	void
+	setup_attachments( Image* image );
+
+	void
+	execute( CommandBuffer* cmd );
 };
 
 } // namespace fluent::rg

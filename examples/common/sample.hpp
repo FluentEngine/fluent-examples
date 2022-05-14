@@ -26,8 +26,7 @@ bool             command_buffers_recorded[ FRAME_COUNT ];
 Swapchain*     swapchain;
 CommandBuffer* command_buffers[ FRAME_COUNT ];
 
-Image*       depth_image;
-RenderPass** render_passes;
+Image* depth_image;
 
 UiContext* ui;
 
@@ -140,59 +139,20 @@ on_init()
 	create_swapchain( device, &swapchain_info, &swapchain );
 	create_depth_image( swapchain->width, swapchain->height );
 
-	RenderPassInfo render_pass_info {};
-	render_pass_info.width                          = swapchain->width;
-	render_pass_info.height                         = swapchain->height;
-	render_pass_info.color_attachment_count         = 1;
-	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::CLEAR;
-	render_pass_info.color_image_states[ 0 ] = ResourceState::COLOR_ATTACHMENT;
-	render_pass_info.depth_stencil_state   = ResourceState::DEPTH_STENCIL_WRITE;
-	render_pass_info.depth_stencil_load_op = AttachmentLoadOp::CLEAR;
-	render_pass_info.depth_stencil         = depth_image;
-
-	render_passes = new RenderPass*[ swapchain->image_count ];
-
-	for ( u32 i = 0; i < swapchain->image_count; i++ )
-	{
-		render_pass_info.color_attachments[ 0 ] = swapchain->images[ i ];
-		create_render_pass( device, &render_pass_info, &render_passes[ i ] );
-	}
-
 	ResourceLoader::init( device, 25 * 1024 * 1024 * 8 );
 
-	ImageInfo color_image_info {};
-	color_image_info.width           = swapchain->width;
-	color_image_info.height          = swapchain->height;
-	color_image_info.depth           = swapchain->images[ 0 ]->depth;
-	color_image_info.descriptor_type = swapchain->images[ 0 ]->descriptor_type;
-	color_image_info.format          = swapchain->images[ 0 ]->format;
-	color_image_info.mip_levels      = swapchain->images[ 0 ]->mip_level_count;
-	color_image_info.sample_count    = swapchain->images[ 0 ]->sample_count;
-
-	ImageInfo depth_image_info {};
-	depth_image_info.width           = swapchain->width;
-	depth_image_info.height          = swapchain->height;
-	depth_image_info.depth           = 1;
-	depth_image_info.format          = Format::D32_SFLOAT;
-	depth_image_info.layer_count     = 1;
-	depth_image_info.mip_levels      = 1;
-	depth_image_info.sample_count    = SampleCount::E1;
-	depth_image_info.descriptor_type = DescriptorType::DEPTH_STENCIL_ATTACHMENT;
-
 	UiInfo ui_info {};
-	ui_info.backend               = backend;
-	ui_info.device                = device;
-	ui_info.min_image_count       = swapchain->min_image_count;
-	ui_info.image_count           = swapchain->image_count;
-	ui_info.in_fly_frame_count    = FRAME_COUNT;
-	ui_info.queue                 = queue;
-	ui_info.color_attachment_info = &color_image_info;
-	ui_info.color_load_op         = AttachmentLoadOp::CLEAR;
-	ui_info.color_state           = ResourceState::COLOR_ATTACHMENT;
-	ui_info.depth_attachment_info = &depth_image_info;
-	ui_info.depth_load_op         = AttachmentLoadOp::CLEAR;
-	ui_info.depth_state           = ResourceState::DEPTH_STENCIL_WRITE;
-	ui_info.window                = get_app_window();
+	ui_info.backend                       = backend;
+	ui_info.device                        = device;
+	ui_info.min_image_count               = swapchain->min_image_count;
+	ui_info.image_count                   = swapchain->image_count;
+	ui_info.in_fly_frame_count            = FRAME_COUNT;
+	ui_info.queue                         = queue;
+	ui_info.color_attachment_count        = 1;
+	ui_info.sample_count                  = SampleCount::E1;
+	ui_info.color_attachment_formats[ 0 ] = swapchain->format;
+	ui_info.depth_stencil_format          = Format::D32_SFLOAT;
+	ui_info.window                        = get_app_window();
 
 	init_ui( &ui_info );
 
@@ -214,22 +174,6 @@ on_resize( u32 width, u32 height )
 	resize_swapchain( device, swapchain, width, height );
 
 	create_depth_image( width, height );
-
-	RenderPassInfo render_pass_info {};
-	render_pass_info.width                          = width;
-	render_pass_info.height                         = height;
-	render_pass_info.color_attachment_count         = 1;
-	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::CLEAR;
-	render_pass_info.color_image_states[ 0 ] = ResourceState::COLOR_ATTACHMENT;
-	render_pass_info.depth_stencil_state   = ResourceState::DEPTH_STENCIL_WRITE;
-	render_pass_info.depth_stencil_load_op = AttachmentLoadOp::CLEAR;
-	render_pass_info.depth_stencil         = depth_image;
-
-	for ( uint32_t i = 0; i < swapchain->image_count; i++ )
-	{
-		render_pass_info.color_attachments[ 0 ] = swapchain->images[ i ];
-		resize_render_pass( device, render_passes[ i ], &render_pass_info );
-	}
 
 	resize_sample( width, height );
 }
@@ -264,14 +208,23 @@ begin_frame()
 
 	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &to_clear_barrier );
 
-	RenderPassBeginInfo render_pass_begin_info {};
-	render_pass_begin_info.render_pass = render_passes[ image_index ];
-	render_pass_begin_info.clear_values[ 0 ].color[ 0 ] = 1.0f;
-	render_pass_begin_info.clear_values[ 0 ].color[ 1 ] = 0.8f;
-	render_pass_begin_info.clear_values[ 0 ].color[ 2 ] = 0.4f;
-	render_pass_begin_info.clear_values[ 0 ].color[ 3 ] = 1.0f;
+	RenderPassBeginInfo pass_begin_info {};
+	pass_begin_info.device                         = device;
+	pass_begin_info.width                          = swapchain->width;
+	pass_begin_info.height                         = swapchain->height;
+	pass_begin_info.color_attachment_count         = 1;
+	pass_begin_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::CLEAR;
+	pass_begin_info.color_image_states[ 0 ] = ResourceState::COLOR_ATTACHMENT;
+	pass_begin_info.color_attachments[ 0 ]  = swapchain->images[ image_index ];
+	pass_begin_info.depth_stencil_state   = ResourceState::DEPTH_STENCIL_WRITE;
+	pass_begin_info.depth_stencil_load_op = AttachmentLoadOp::CLEAR;
+	pass_begin_info.depth_stencil         = depth_image;
+	pass_begin_info.clear_values[ 0 ].color[ 0 ] = 1.0f;
+	pass_begin_info.clear_values[ 0 ].color[ 1 ] = 0.8f;
+	pass_begin_info.clear_values[ 0 ].color[ 2 ] = 0.4f;
+	pass_begin_info.clear_values[ 0 ].color[ 3 ] = 1.0f;
 
-	cmd_begin_render_pass( cmd, &render_pass_begin_info );
+	cmd_begin_render_pass( cmd, &pass_begin_info );
 	cmd_set_viewport( cmd,
 	                  0,
 	                  0,
@@ -376,11 +329,6 @@ on_shutdown()
 	shutdown_ui( device );
 	ResourceLoader::shutdown();
 	destroy_image( device, depth_image );
-	for ( uint32_t i = 0; i < swapchain->image_count; i++ )
-	{
-		destroy_render_pass( device, render_passes[ i ] );
-	}
-	delete[] render_passes;
 	destroy_swapchain( device, swapchain );
 	for ( u32 i = 0; i < FRAME_COUNT; ++i )
 	{
@@ -433,7 +381,7 @@ main( int argc, char** argv )
 	ApplicationConfig config;
 	config.argc        = argc;
 	config.argv        = argv;
-	config.window_info = { SAMPLE_NAME, 100, 100, 1400, 900, false };
+	config.window_info = { SAMPLE_NAME, 100, 100, 1400, 900, true };
 	config.log_level   = LogLevel::TRACE;
 	config.on_init     = on_init;
 	config.on_update   = on_update;

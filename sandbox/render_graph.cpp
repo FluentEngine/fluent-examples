@@ -4,7 +4,34 @@ namespace fluent::rg
 {
 
 void
-RenderGraph::init( const Device* device )
+RenderGraphPass::add_color_output( std::string const& name,
+                                   ImageInfo const&   info )
+{
+	RenderGraphImage* image = graph->get_image( name );
+	image->info             = info;
+	color_outputs.emplace_back( image );
+}
+
+RenderGraphImage*
+RenderGraph::get_image( std::string const& name )
+{
+	auto it = image_name_to_index.find( name );
+	if ( it != image_name_to_index.cend() )
+	{
+		return &images[ image_name_to_index[ name ] ];
+	}
+	else
+	{
+		u32               idx       = images.size();
+		RenderGraphImage* image     = &images.emplace_back();
+		image->index                = idx;
+		image_name_to_index[ name ] = idx;
+		return image;
+	}
+}
+
+void
+RenderGraph::init( Device const* device )
 {
 	this->device = device;
 }
@@ -12,178 +39,96 @@ RenderGraph::init( const Device* device )
 void
 RenderGraph::shutdown()
 {
-	for ( auto& pass : passes_to_execute )
-	{
-		pass.destroy_callback( pass.user_data );
-	}
+}
 
-	for ( auto* color_output : color_outputs )
-	{
-		destroy_image( device, color_output );
-	}
+RenderGraphPass*
+RenderGraph::add_pass( std::string const& name )
+{
+	u32 idx                    = passes.size();
+	pass_name_to_index[ name ] = idx;
 
-	for ( auto* depth_output : depth_outputs )
-	{
-		destroy_image( device, depth_output );
-	}
+	RenderGraphPass* pass       = &passes.emplace_back();
+	pass->graph                 = this;
+	pass->get_color_clear_value = []( u32 idx, ColorClearValue* clear_values )
+	{ return false; };
 
-	for ( auto& [ hash, pass ] : passes )
+	return pass;
+}
+
+void
+RenderGraph::set_backbuffer_source( std::string const& name )
+{
+	backbuffer_source_name = name;
+}
+
+void
+RenderGraph::build()
+{
+	for ( u32 pass = 0; pass < passes.size(); ++pass )
 	{
-		destroy_render_pass( device, pass );
+		RenderPassBeginInfo pass_info {};
+		pass_info.device                 = device;
+		pass_info.color_attachment_count = passes[ pass ].color_outputs.size();
+		for ( u32 att = 0; att < pass_info.color_attachment_count; ++att )
+		{
+			bool need_clear = passes[ pass ].get_color_clear_value(
+			    att,
+			    &pass_info.clear_values[ att ].color );
+
+			// TODO:
+			// used_in_previous_passes ?
+			// AttachmentLoadOp::LOAD;
+			pass_info.color_attachment_load_ops[ att ] =
+			    need_clear ? AttachmentLoadOp::CLEAR
+			               : AttachmentLoadOp::DONT_CARE;
+
+			pass_info.color_image_states[ att ] =
+			    ResourceState::COLOR_ATTACHMENT;
+		}
+
+		pass_infos.emplace_back( std::move( pass_info ) );
 	}
 }
 
 void
-RenderGraph::build( Queue* queue, CommandBuffer* cmd )
+RenderGraph::setup_attachments( Image* image )
 {
-	ImageInfo desc {};
-	desc.width        = 1400;
-	desc.height       = 900;
-	desc.depth        = 1;
-	desc.format       = Format::R8G8B8A8_SRGB;
-	desc.layer_count  = 1;
-	desc.mip_levels   = 1;
-	desc.sample_count = SampleCount::E1;
-	desc.descriptor_type =
-	    DescriptorType::COLOR_ATTACHMENT | DescriptorType::SAMPLED_IMAGE;
-
-	create_image( device, &desc, &color_outputs.emplace_back() );
-	create_image( device, &desc, &color_outputs.emplace_back() );
-	create_image( device, &desc, &color_outputs.emplace_back() );
-
-	ImageInfo depth_image_info {};
-	depth_image_info.width           = 1400;
-	depth_image_info.height          = 900;
-	depth_image_info.depth           = 1;
-	depth_image_info.format          = Format::D32_SFLOAT;
-	depth_image_info.layer_count     = 1;
-	depth_image_info.mip_levels      = 1;
-	depth_image_info.sample_count    = SampleCount::E1;
-	depth_image_info.descriptor_type = DescriptorType::DEPTH_STENCIL_ATTACHMENT;
-
-	create_image( device, &depth_image_info, &depth_outputs.emplace_back() );
-
-	ImageBarrier barrier {};
-	barrier.image     = depth_outputs.back();
-	barrier.old_state = ResourceState::UNDEFINED;
-	barrier.new_state = ResourceState::DEPTH_STENCIL_WRITE;
-
-	begin_command_buffer( cmd );
-	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
-	end_command_buffer( cmd );
-	immediate_submit( queue, cmd );
-
-	RenderPassInfo render_pass_info {};
-	render_pass_info.width                          = 1400;
-	render_pass_info.height                         = 900;
-	render_pass_info.color_attachment_count         = 3;
-	render_pass_info.color_attachments[ 0 ]         = color_outputs[ 0 ];
-	render_pass_info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::CLEAR;
-	render_pass_info.color_image_states[ 0 ] = ResourceState::COLOR_ATTACHMENT;
-	render_pass_info.color_attachments[ 1 ]  = color_outputs[ 1 ];
-	render_pass_info.color_attachment_load_ops[ 1 ] = AttachmentLoadOp::CLEAR;
-	render_pass_info.color_image_states[ 1 ] = ResourceState::COLOR_ATTACHMENT;
-	render_pass_info.color_attachments[ 2 ]  = color_outputs[ 2 ];
-	render_pass_info.color_attachment_load_ops[ 2 ] = AttachmentLoadOp::CLEAR;
-	render_pass_info.color_image_states[ 2 ] = ResourceState::COLOR_ATTACHMENT;
-	render_pass_info.depth_stencil           = depth_outputs[ 0 ];
-	render_pass_info.depth_stencil_load_op   = AttachmentLoadOp::CLEAR;
-	render_pass_info.depth_stencil_state = ResourceState::DEPTH_STENCIL_WRITE;
-
-	create_render_pass( device,
-	                    &render_pass_info,
-	                    &passes_to_execute[ 0 ].pass );
-
-	passes_to_execute[ 0 ].create_callback( passes_to_execute[ 0 ].pass,
-	                                        passes_to_execute[ 0 ].user_data );
-
-	passes[ GraphPassHasher()( render_pass_info ) ] =
-	    passes_to_execute[ 0 ].pass;
-};
+	for ( u32 pass = 0; pass < pass_infos.size(); ++pass )
+	{
+		for ( u32 att = 0; att < pass_infos[ pass ].color_attachment_count;
+		      ++att )
+		{
+			if ( image_name_to_index[ backbuffer_source_name ] ==
+			     passes[ pass ].color_outputs[ att ]->index )
+			{
+				pass_infos[ pass ].color_attachments[ att ] = image;
+			}
+			pass_infos[ pass ].width =
+			    pass_infos[ pass ].color_attachments[ att ]->width;
+			pass_infos[ pass ].height =
+			    pass_infos[ pass ].color_attachments[ att ]->height;
+		}
+	}
+}
 
 void
-RenderGraph::execute( CommandBuffer* cmd, Image* image )
+RenderGraph::execute( CommandBuffer* cmd )
 {
-	ImageBarrier barrier {};
-	barrier.image     = image;
-	barrier.old_state = ResourceState::UNDEFINED;
-	barrier.new_state = ResourceState::COLOR_ATTACHMENT;
-
-	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
-
-	barrier.image = color_outputs[ 0 ];
-	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
-	barrier.image = color_outputs[ 1 ];
-	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
-	barrier.image = color_outputs[ 2 ];
-	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
-
-	// swap pass
+	for ( u32 pass = 0; pass < pass_infos.size(); ++pass )
 	{
-		auto& pass                               = passes_to_execute.back();
-		pass.info.width                          = image->width;
-		pass.info.height                         = image->height;
-		pass.info.color_attachment_load_ops[ 0 ] = AttachmentLoadOp::CLEAR;
-		pass.info.color_image_states[ 0 ] = ResourceState::COLOR_ATTACHMENT;
-		pass.info.color_attachments[ 0 ]  = image;
+		ImageBarrier barrier {};
+		barrier.image     = pass_infos[ pass ].color_attachments[ 0 ];
+		barrier.old_state = ResourceState::UNDEFINED;
+		barrier.new_state = ResourceState::COLOR_ATTACHMENT;
+		cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
 
-		u32 hash = GraphPassHasher()( pass.info );
-		if ( passes.find( hash ) == passes.cend() )
-		{
-			create_render_pass( device, &pass.info, &pass.pass );
-			passes[ hash ] = pass.pass;
-			if ( pass.create_callback )
-			{
-				pass.create_callback( pass.pass, pass.user_data );
-			}
-		}
-		else
-		{
-			pass.pass = passes[ hash ];
-		}
-	}
-
-	u32 i = 0;
-
-	for ( auto& pass : passes_to_execute )
-	{
-		pass.begin_info.render_pass = pass.pass;
-		cmd_begin_render_pass( cmd, &pass.begin_info );
-		if ( pass.execute_callback )
-		{
-			pass.execute_callback( cmd, pass.user_data );
-		}
+		cmd_begin_render_pass( cmd, &pass_infos[ pass ] );
 		cmd_end_render_pass( cmd );
 
-		i++;
-		if ( i == 1 )
-		{
-			barrier.old_state = ResourceState::COLOR_ATTACHMENT;
-			barrier.new_state = ResourceState::SHADER_READ_ONLY;
-
-			barrier.image = color_outputs[ 0 ];
-			cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
-			barrier.image = color_outputs[ 1 ];
-			cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
-			barrier.image = color_outputs[ 2 ];
-			cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
-		}
+		barrier.old_state = ResourceState::COLOR_ATTACHMENT;
+		barrier.new_state = ResourceState::PRESENT;
+		cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
 	}
-
-	barrier.image     = image;
-	barrier.old_state = ResourceState::COLOR_ATTACHMENT;
-	barrier.new_state = ResourceState::PRESENT;
-
-	cmd_barrier( cmd, 0, nullptr, 0, nullptr, 1, &barrier );
-};
-
-GraphPass*
-RenderGraph::add_pass( const std::string& name )
-{
-	auto* pass       = &passes_to_execute.emplace_back();
-	pass->info       = {};
-	pass->begin_info = {};
-	return pass;
 }
 
 } // namespace fluent::rg

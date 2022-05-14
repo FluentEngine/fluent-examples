@@ -22,13 +22,16 @@ init_sample()
 	create_descriptor_set_layout( device, shader, &descriptor_set_layout );
 
 	PipelineInfo pipeline_info {};
-	pipeline_info.shader                       = shader;
-	pipeline_info.rasterizer_info.cull_mode    = CullMode::NONE;
-	pipeline_info.rasterizer_info.front_face   = FrontFace::COUNTER_CLOCKWISE;
-	pipeline_info.depth_state_info.depth_test  = false;
-	pipeline_info.depth_state_info.depth_write = false;
-	pipeline_info.descriptor_set_layout        = descriptor_set_layout;
-	pipeline_info.render_pass                  = render_passes[ 0 ];
+	pipeline_info.shader                        = shader;
+	pipeline_info.rasterizer_info.cull_mode     = CullMode::NONE;
+	pipeline_info.rasterizer_info.front_face    = FrontFace::COUNTER_CLOCKWISE;
+	pipeline_info.depth_state_info.depth_test   = false;
+	pipeline_info.depth_state_info.depth_write  = false;
+	pipeline_info.descriptor_set_layout         = descriptor_set_layout;
+	pipeline_info.sample_count                  = SampleCount::E1;
+	pipeline_info.color_attachment_count        = 1;
+	pipeline_info.color_attachment_formats[ 0 ] = swapchain->format;
+	pipeline_info.depth_stencil_format          = depth_image->format;
 	pipeline_info.topology = PrimitiveTopology::TRIANGLE_LIST;
 
 	create_graphics_pipeline( device, &pipeline_info, &pipeline );
