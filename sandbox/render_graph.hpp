@@ -15,25 +15,50 @@ struct RenderGraphImage
 	u32       index;
 };
 
-using GetClearColorCallback = bool ( * )( u32              idx,
-                                          ColorClearValue* clear_values );
+using GetClearColorCallback = bool ( * )( u32 idx, ColorClearValue* );
+using ExecuteCallback       = void ( * )( CommandBuffer*, void* );
 
 struct RenderGraphPass
 {
 	RenderGraph* graph;
-
-	GetClearColorCallback get_color_clear_value;
-
 	std::vector<RenderGraphImage*> color_outputs;
+	void* user_data;
+	
+	GetClearColorCallback get_color_clear_value;
+	ExecuteCallback execute_callback;
 
 	void
 	add_color_output( std::string const& name, ImageInfo const& info );
 
 	void
+	execute( CommandBuffer* cmd )
+	{
+		execute_callback( cmd, user_data );
+	}
+
+	void
+	set_user_data(void* data)
+	{
+		user_data = data;
+	}
+	
+	void
 	set_get_clear_color( GetClearColorCallback&& cb )
 	{
 		get_color_clear_value = cb;
 	}
+	
+	void
+	set_execute_callback( ExecuteCallback&& cb )
+	{
+		execute_callback = cb;
+	}
+};
+
+struct PassBarriers
+{
+	u32                       image_barrier_count;
+	std::vector<ImageBarrier> image_barriers;
 };
 
 struct RenderGraph
@@ -46,10 +71,14 @@ struct RenderGraph
 	std::vector<RenderGraphImage> images;
 	std::vector<RenderGraphPass>  passes;
 
+	std::vector<PassBarriers>        pass_barriers;
 	std::vector<RenderPassBeginInfo> pass_infos;
+
+	Image* backbuffer_image;
 
 	RenderGraphImage*
 	get_image( std::string const& name );
+
 	// public:
 
 	void

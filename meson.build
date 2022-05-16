@@ -1,6 +1,9 @@
 project('fluent-examples', [ 'c', 'cpp' ], default_options : ['default_library=static', 'c_std=c17', 'cpp_std=c++17'] )
 
-compile_args = []
+compile_args = [
+	'-fno-rtti',
+	'-fno-exceptions'
+]
 
 fluent = subproject('fluent')
 fluent_engine_dep = fluent.get_variable('fluent_engine_dep')

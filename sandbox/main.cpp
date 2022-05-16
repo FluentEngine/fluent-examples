@@ -7,6 +7,7 @@ inline const char* MODEL_TEXTURE = "diablo.tga";
 inline const char* MODEL_NAME    = "diablo.obj";
 #include "model.hpp"
 #include "render_graph.hpp"
+#include "editor.hpp"
 
 #include "shader_deffered_shading.vert.h"
 #include "shader_deffered_shading.frag.h"
@@ -31,9 +32,10 @@ struct FrameData
 	bool           cmd_recorded = false;
 };
 
-u32 window_width  = 800;
-u32 window_height = 600;
+u32 window_width  = 1400;
+u32 window_height = 900;
 
+RendererAPI      renderer_api = RendererAPI::VULKAN;
 RendererBackend* backend;
 Device*          device;
 Queue*           graphics_queue;
@@ -41,8 +43,11 @@ Swapchain*       swapchain;
 Image*           depth_image;
 FrameData        frames[ FRAME_COUNT ];
 u32              frame_index = 0;
+u32              image_index = 0;
 
 rg::RenderGraph graph;
+
+Image* black_texture;
 
 void
 begin_frame( u32* image_index );
@@ -57,7 +62,7 @@ on_init()
 	fs::set_models_directory( "../../sandbox/" );
 
 	RendererBackendInfo backend_info {};
-	backend_info.api = RendererAPI::VULKAN;
+	backend_info.api = renderer_api;
 	create_renderer_backend( &backend_info, &backend );
 
 	DeviceInfo device_info {};
@@ -93,6 +98,30 @@ on_init()
 	swapchain_info.queue           = graphics_queue;
 	create_swapchain( device, &swapchain_info, &swapchain );
 
+	ResourceLoader::init( device, 5000 );
+
+	ImageInfo image_info {};
+	image_info.width           = 2;
+	image_info.height          = 2;
+	image_info.depth           = 1;
+	image_info.format          = swapchain->format;
+	image_info.layer_count     = 1;
+	image_info.mip_levels      = 1;
+	image_info.sample_count    = SampleCount::E1;
+	image_info.descriptor_type = DescriptorType::SAMPLED_IMAGE;
+
+	create_image( device, &image_info, &black_texture );
+	
+	struct Color
+	{
+		u8 r, g, b, a;
+	} color { 0, 0, 0, 255 };
+
+	Color image_data[4] = { color, color, color, color };
+	ResourceLoader::upload_image( black_texture,
+	                              sizeof( image_data ),
+	                              image_data );
+
 	UiInfo ui_info {};
 	ui_info.backend                       = backend;
 	ui_info.device                        = device;
@@ -106,6 +135,10 @@ on_init()
 	ui_info.window                        = get_app_window();
 
 	init_ui( &ui_info );
+
+	auto& io = ImGui::GetIO();
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	editor_init( renderer_api );
 
 	begin_command_buffer( frames[ 0 ].cmd );
 	ui_upload_resources( frames[ 0 ].cmd );
@@ -128,6 +161,21 @@ on_init()
 		    return true;
 	    } );
 
+	pass->set_execute_callback(
+	    []( CommandBuffer* cmd, void* )
+	    {
+		    editor_set_scene_image( black_texture );
+
+		    ui_begin_frame( cmd );
+		    editor_render();
+		    ui_end_frame( cmd );
+
+		    if ( editor_exit_requested() )
+		    {
+			    app_request_exit();
+		    }
+	    } );
+
 	graph.set_backbuffer_source( "back" );
 	graph.build();
 }
@@ -135,7 +183,6 @@ on_init()
 void
 on_update( f32 delta_time )
 {
-	u32 image_index;
 	begin_frame( &image_index );
 
 	CommandBuffer* cmd = frames[ frame_index ].cmd;
@@ -165,6 +212,9 @@ on_shutdown()
 
 	shutdown_ui( device );
 
+	ResourceLoader::shutdown();
+	destroy_image( device, black_texture );
+
 	destroy_swapchain( device, swapchain );
 
 	for ( u32 i = 0; i < FRAME_COUNT; i++ )
@@ -193,7 +243,7 @@ main( int argc, char** argv )
 	window_info.y          = 100;
 	window_info.width      = window_width;
 	window_info.height     = window_height;
-	window_info.resizable  = true;
+	window_info.resizable  = false;
 	window_info.centered   = true;
 	window_info.fullscreen = false;
 	window_info.grab_mouse = false;
