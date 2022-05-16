@@ -12,12 +12,15 @@ void
 editor_render();
 
 void
-editor_set_scene_image(Image* image);
+editor_set_scene_image( Image* image );
 
 b32
 editor_exit_requested();
 
 b32
-api_change_requested( RendererAPI* api );
+editor_api_change_requested( RendererAPI* api );
+
+b32
+editor_viewport_resized( Vector2& size );
 
 } // namespace fluent

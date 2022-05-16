@@ -15,20 +15,34 @@ struct RenderGraphImage
 	u32       index;
 };
 
-using GetClearColorCallback = bool ( * )( u32 idx, ColorClearValue* );
-using ExecuteCallback       = void ( * )( CommandBuffer*, void* );
+using GetClearColorCallback        = bool ( * )( u32 idx, ColorClearValue* );
+using GetClearDepthStencilCallback = bool ( * )( DepthStencilClearValue* );
+using CreateCallback               = void ( * )( void* );
+using ExecuteCallback              = void ( * )( CommandBuffer*, void* );
+using DestroyCallback              = void ( * )( void* );
 
 struct RenderGraphPass
 {
-	RenderGraph* graph;
+	RenderGraph*                   graph;
 	std::vector<RenderGraphImage*> color_outputs;
-	void* user_data;
-	
-	GetClearColorCallback get_color_clear_value;
-	ExecuteCallback execute_callback;
+	RenderGraphImage*              depth_output;
+	std::vector<RenderGraphImage*> texture_inputs;
+	void*                          user_data;
+
+	GetClearColorCallback        get_color_clear_value;
+	GetClearDepthStencilCallback get_depth_stencil_clear_value;
+	CreateCallback               create_callback;
+	ExecuteCallback              execute_callback;
+	DestroyCallback              destroy_callback;
 
 	void
 	add_color_output( std::string const& name, ImageInfo const& info );
+
+	void
+	add_depth_output( std::string const& name, ImageInfo const& info );
+
+	void
+	add_texture_input( std::string const& name );
 
 	void
 	execute( CommandBuffer* cmd )
@@ -37,21 +51,39 @@ struct RenderGraphPass
 	}
 
 	void
-	set_user_data(void* data)
+	set_user_data( void* data )
 	{
 		user_data = data;
 	}
-	
+
 	void
 	set_get_clear_color( GetClearColorCallback&& cb )
 	{
 		get_color_clear_value = cb;
 	}
-	
+
+	void
+	set_get_clear_depth_stencil( GetClearDepthStencilCallback&& cb )
+	{
+		get_depth_stencil_clear_value = cb;
+	}
+
+	void
+	set_create_callback( CreateCallback&& cb )
+	{
+		create_callback = cb;
+	}
+
 	void
 	set_execute_callback( ExecuteCallback&& cb )
 	{
 		execute_callback = cb;
+	}
+
+	void
+	set_destroy_callback( DestroyCallback&& cb )
+	{
+		destroy_callback = cb;
 	}
 };
 
@@ -73,11 +105,12 @@ struct RenderGraph
 
 	std::vector<PassBarriers>        pass_barriers;
 	std::vector<RenderPassBeginInfo> pass_infos;
+	std::vector<Image*>              physical_images;
 
 	Image* backbuffer_image;
 
 	RenderGraphImage*
-	get_image( std::string const& name );
+	get_graph_image( std::string const& name );
 
 	// public:
 
@@ -101,6 +134,9 @@ struct RenderGraph
 
 	void
 	execute( CommandBuffer* cmd );
+
+	Image*
+	get_image( const std::string& name );
 };
 
 } // namespace fluent::rg

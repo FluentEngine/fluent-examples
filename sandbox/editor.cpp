@@ -13,30 +13,17 @@ struct EditorData
 	bool               log_open             = true;
 	Image*             scene_image          = nullptr;
 	Vector2            viewport_size        = { 0.0f, 0.0f };
-	Vector2            viewport_bounds[ 2 ];
-	b32                viewport_focused = false;
-	b32                viewport_hovered = false;
 };
 
 static EditorData editor_data;
-
-std::string
-to_api_name( RendererAPI api )
-{
-	switch ( api )
-	{
-	case RendererAPI::VULKAN: return "Vulkan";
-	case RendererAPI::D3D12: return "D3D12";
-	case RendererAPI::METAL: return "Metal";
-	default: FT_ASSERT( false );
-	}
-}
 
 void
 editor_init( RendererAPI api )
 {
 	auto& io = ImGui::GetIO();
-	FT_ASSERT( io.ConfigFlags & ImGuiConfigFlags_DockingEnable );
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	io.IniFilename = "../../sandbox/editor.ini";
+
 	editor_data.dockspace_flags = ImGuiDockNodeFlags_None;
 	editor_data.dockspace_window_flags =
 	    ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking |
@@ -101,10 +88,7 @@ editor_render()
 
 	ImGui::Separator();
 
-	ImGui::Text( "%s",
-	             std::string( "Current API: " )
-	                 .append( to_api_name( editor_data.current_api ) )
-	                 .c_str() );
+	ImGui::Text( "Renderer API" );
 	static i32 api = static_cast<int>( editor_data.current_api );
 	ImGui::RadioButton( "Vulkan", &api, 0 );
 	ImGui::RadioButton( "D3D12", &api, 1 );
@@ -117,38 +101,34 @@ editor_render()
 	ImGui::Separator();
 
 	ImGui::End();
-	
+
 	ImGui::PushStyleVar( ImGuiStyleVar_WindowPadding, ImVec2 { 0, 0 } );
 	ImGui::Begin( "Viewport" );
-	auto viewport_min_region         = ImGui::GetWindowContentRegionMin();
-	auto viewport_max_region         = ImGui::GetWindowContentRegionMax();
-	auto viewport_offset             = ImGui::GetWindowPos();
-	editor_data.viewport_bounds[ 0 ] = {
-		viewport_min_region.x + viewport_offset.x,
-		viewport_min_region.y + viewport_offset.y
-	};
-	editor_data.viewport_bounds[ 1 ] = {
-		viewport_max_region.x + viewport_offset.x,
-		viewport_max_region.y + viewport_offset.y
-	};
-
-	editor_data.viewport_focused = ImGui::IsWindowFocused();
-	editor_data.viewport_hovered = ImGui::IsWindowHovered();
-
 	ImVec2 viewport_panel_size = ImGui::GetContentRegionAvail();
 	editor_data.viewport_size  = { viewport_panel_size.x,
                                   viewport_panel_size.y };
 
 	ImGui::Image(
 	    get_imgui_texture_id( editor_data.scene_image ),
-	    ImVec2 { editor_data.viewport_size.x, editor_data.viewport_size.y },
-	    ImVec2 { 0, 1 },
-	    ImVec2 { 1, 0 } );
+	    ImVec2 { editor_data.viewport_size.x, editor_data.viewport_size.y } );
 
 	ImGui::End();
 	ImGui::PopStyleVar();
-	
+
 	ImGui::Begin( "Log", &editor_data.log_open );
+	ImGui::End();
+
+	Vector3 v;
+
+	ImGui::Begin( "Inspector" );
+	ImGui::SetNextItemOpen( true );
+	if ( ImGui::CollapsingHeader( "Transform" ) )
+	{
+		ImGui::SliderFloat3( "Position", &v.x, -255.0f, 255.0f );
+		ImGui::SliderFloat3( "Rotation", &v.x, -255.0f, 255.0f );
+		ImGui::SliderFloat3( "Scale", &v.x, -255.0f, 255.0f );
+		ImGui::Separator();
+	}
 	ImGui::End();
 }
 
@@ -165,7 +145,7 @@ editor_exit_requested()
 }
 
 b32
-api_change_requested( RendererAPI* api )
+editor_api_change_requested( RendererAPI* api )
 {
 	b32 res                          = editor_data.api_change_requested;
 	*api                             = editor_data.current_api;
