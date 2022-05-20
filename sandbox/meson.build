@@ -1,21 +1,9 @@
-shaders = files([
-    'shaders/gbuffer.vert.ft',
-	'shaders/gbuffer.frag.ft',
-	'shaders/deffered_shading.vert.ft',
-	'shaders/deffered_shading.frag.ft'
-])
+fluent = subproject('fluent')
+ft_log_dep = fluent.get_variable('ft_log_dep')
+ft_os_dep = fluent.get_variable('ft_os_dep')
+ft_renderer_dep = fluent.get_variable('ft_renderer_dep')
 
-sources = files([
-	'main.cpp', 
-	'render_graph.hpp', 
-	'render_graph.cpp',
-	'model.hpp',
-	'editor.hpp',
-	'editor.cpp'
-])
-
-executable('sandbox', sources, ft_shader_gen.process(shaders),
-    dependencies	: fluent_engine_dep,
-	cpp_args		: compile_args,
+executable('sandbox', 'main.c',
+    dependencies	: [ ft_log_dep, ft_renderer_dep, ft_os_dep ],
 	install			: true
 )
