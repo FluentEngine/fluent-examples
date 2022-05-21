@@ -1,8 +1,8 @@
 #include <fluent/os.h>
 #include <fluent/renderer.h>
 
-#include <main.vert.h>
-#include <main.frag.h>
+#include "main.vert.h"
+#include "main.frag.h"
 
 #define FRAME_COUNT   2
 #define WINDOW_WIDTH  640

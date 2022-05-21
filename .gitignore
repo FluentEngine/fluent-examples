@@ -1,5 +1,6 @@
 build/
-.vscode/
+fluent/
+**/.vscode/
 
 *.bin
 *.user
@@ -11,3 +12,6 @@ ehthumbs.db
 Icon?
 Thumbs.db
 *.DS_Store
+
+**vert.h
+**frag.h

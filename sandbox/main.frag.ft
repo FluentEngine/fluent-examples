@@ -1,0 +1,23 @@
+#include "fluent.hlsl"
+
+cbuf(ubo, 0)
+{
+    float4 color;
+};
+
+struct Input
+{
+    float3 color : TEXCOORD0;
+};
+
+struct Output
+{
+    float4 color : SV_Target0;
+};
+
+Output main(Input stage_input)
+{
+    Output stage_output;
+    stage_output.color = float4(lerp(stage_input.color, color.rgb, 0.6), 1.0f);
+    return stage_output;
+}
