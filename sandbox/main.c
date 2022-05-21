@@ -10,12 +10,12 @@
 
 struct FrameData
 {
-	Semaphore* present_semaphore;
-	Semaphore* render_semaphore;
-	Fence*     render_fence;
+	struct Semaphore* present_semaphore;
+	struct Semaphore* render_semaphore;
+	struct Fence*     render_fence;
 
-	CommandPool*   cmd_pool;
-	CommandBuffer* cmd;
+	struct CommandPool*   cmd_pool;
+	struct CommandBuffer* cmd;
 	b32            cmd_recorded;
 };
 
@@ -89,15 +89,15 @@ on_init()
 	memcpy( ubo_buffer->mapped_memory, color, sizeof( color ) );
 	unmap_memory( device, ubo_buffer );
 
-	DescriptorSetInfo set_info = { .descriptor_set_layout = dsl, .set = 0 };
+	struct DescriptorSetInfo set_info = { .descriptor_set_layout = dsl, .set = 0 };
 
-	BufferDescriptor buffer_descriptor = {
+	struct BufferDescriptor buffer_descriptor = {
 		.buffer = ubo_buffer,
 		.offset = 0,
 		.range  = sizeof( color ),
 	};
 
-	DescriptorWrite descriptor_write = {
+	struct DescriptorWrite descriptor_write = {
 		.buffer_descriptors  = &buffer_descriptor,
 		.descriptor_count    = 1,
 		.descriptor_name     = "ubo",
@@ -114,16 +114,16 @@ on_update( f32 delta_time )
 {
 	begin_frame();
 
-	CommandBuffer* cmd = frames[ frame_index ].cmd;
+	struct CommandBuffer* cmd = frames[ frame_index ].cmd;
 
 	begin_command_buffer( cmd );
 
-	ImageBarrier barrier = {};
+	struct ImageBarrier barrier = {};
 	barrier.image        = swapchain->images[ image_index ];
 	barrier.old_state    = FT_RESOURCE_STATE_UNDEFINED;
 	barrier.new_state    = FT_RESOURCE_STATE_COLOR_ATTACHMENT;
 
-	RenderPassBeginInfo rp_info            = {};
+	struct RenderPassBeginInfo rp_info            = {};
 	rp_info.device                         = device;
 	rp_info.width                          = WINDOW_WIDTH;
 	rp_info.height                         = WINDOW_HEIGHT;
@@ -182,7 +182,7 @@ on_shutdown()
 int
 main( int argc, char** argv )
 {
-	WindowInfo window_info = {};
+	struct WindowInfo window_info = {};
 	window_info.title      = "fluent-sandbox";
 	window_info.x          = 100;
 	window_info.y          = 100;
@@ -193,7 +193,7 @@ main( int argc, char** argv )
 	window_info.fullscreen = 0;
 	window_info.grab_mouse = 0;
 
-	ApplicationConfig config = {};
+	struct ApplicationConfig config = {};
 	config.argc              = argc;
 	config.argv              = argv;
 	config.window_info       = window_info;
@@ -213,16 +213,16 @@ main( int argc, char** argv )
 void
 init_renderer()
 {
-	RendererBackendInfo backend_info = {};
+	struct RendererBackendInfo backend_info = {};
 	backend_info.api                 = renderer_api;
 	backend_info.wsi_info            = get_ft_wsi_info();
 	create_renderer_backend( &backend_info, &backend );
 
-	DeviceInfo device_info         = {};
-	device_info.frame_in_use_count = FRAME_COUNT;
+	struct DeviceInfo device_info         = {};
+	device_info.backend                   = backend;
 	create_device( backend, &device_info, &device );
 
-	QueueInfo queue_info  = {};
+	struct QueueInfo queue_info  = {};
 	queue_info.queue_type = FT_QUEUE_TYPE_GRAPHICS;
 	create_queue( device, &queue_info, &graphics_queue );
 
@@ -233,7 +233,7 @@ init_renderer()
 		create_semaphore( device, &frames[ i ].render_semaphore );
 		create_fence( device, &frames[ i ].render_fence );
 
-		CommandPoolInfo pool_info = {};
+		struct CommandPoolInfo pool_info = {};
 		pool_info.queue           = graphics_queue;
 		create_command_pool( device, &pool_info, &frames[ i ].cmd_pool );
 		create_command_buffers( device,
@@ -242,7 +242,7 @@ init_renderer()
 		                        &frames[ i ].cmd );
 	}
 
-	SwapchainInfo swapchain_info = {};
+	struct SwapchainInfo swapchain_info = {};
 	window_get_size( get_app_window(),
 	                 &swapchain_info.width,
 	                 &swapchain_info.height );
@@ -298,7 +298,7 @@ begin_frame()
 void
 end_frame()
 {
-	QueueSubmitInfo submit_info      = {};
+	struct QueueSubmitInfo submit_info      = {};
 	submit_info.wait_semaphore_count = 1;
 	submit_info.wait_semaphores      = &frames[ frame_index ].present_semaphore;
 	submit_info.command_buffer_count = 1;
@@ -309,7 +309,7 @@ end_frame()
 
 	queue_submit( graphics_queue, &submit_info );
 
-	QueuePresentInfo queue_present_info     = {};
+	struct QueuePresentInfo queue_present_info     = {};
 	queue_present_info.wait_semaphore_count = 1;
 	queue_present_info.wait_semaphores =
 	    &frames[ frame_index ].render_semaphore;
