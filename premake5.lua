@@ -4,13 +4,6 @@ workspace "fluent-examples"
     location "build"
     configurations { "release", "debug" }
 
-    buildoptions {}
-    filter { "configurations:debug" }
-        buildoptions { "-g" }
-        defines { "FLUENT_DEBUG" }
-    filter { "configurations:release" }
-        buildoptions { "-O3" }
-
 -- TODO: make option
 if (true)
 then

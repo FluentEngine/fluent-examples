@@ -1,13 +1,22 @@
-project "sandbox"
+local commons = {}
+
+commons.opts = function()
     kind "WindowedApp"
     language "C++"
-
-    includedirs {
+	
+	filter { "configurations:debug" }
+        symbols "On"
+        defines { "FLUENT_DEBUG" }
+    filter { "configurations:release" }
+		symbols "Off"
+		optimize "Speed"
+		
+	includedirs {
         "../fluent/sources",
         "../fluent/sources/third_party/",
     }
-
-    links { 
+    
+	links { 
         "ft_renderer", 
         "ft_os", 
         "ft_log", 
@@ -17,15 +26,11 @@ project "sandbox"
         "tiny_image_format",
         "vk_mem_alloc",
         "volk",
+        "m"
     }
+end
 
-    files {
-        "main.c",
-
-        "main.vert.ft",
-        "main.frag.ft"
-    }
-
+commons.shaders = function()
     filter 'files:**.ft'
         buildmessage 'Compiling shader %{file.relpath}'
 
@@ -40,4 +45,34 @@ project "sandbox"
         buildoutputs { 
 			path.getabsolute("%{file.basename}.h")
 		}
-		
+end
+
+project "sandbox"
+
+	commons.opts()
+	
+    files {
+        "main.c",
+
+        "main.vert.ft",
+        "main.frag.ft"
+    }
+
+	commons.shaders()
+
+project "test_wsi"
+	
+	commons.opts()
+
+    files {
+        "test_wsi.c",
+
+        "main.vert.ft",
+        "main.frag.ft"
+    }
+	
+	links {		
+		"glfw"	
+	}
+	
+	commons.shaders()
