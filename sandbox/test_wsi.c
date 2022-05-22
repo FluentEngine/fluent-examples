@@ -1,5 +1,6 @@
 #include <math.h>
-#include <fluent/os.h>
+#include <volk/volk.h>
+#include <GLFW/glfw3.h>
 #include <fluent/renderer.h>
 
 #include "main.vert.h"
@@ -20,6 +21,9 @@ struct FrameData
 	b32                   cmd_recorded;
 };
 
+static GLFWwindow*    window   = NULL;
+static struct WsiInfo glfw_wsi = {};
+
 static enum RendererAPI        renderer_api   = FT_RENDERER_API_VULKAN;
 static struct RendererBackend* backend        = NULL;
 static struct Device*          device         = NULL;
@@ -35,6 +39,9 @@ static struct Buffer*              ubo_buffer = NULL;
 static struct Sampler*             sampler    = NULL;
 static struct Image*               texture    = NULL;
 static struct DescriptorSet*       set        = NULL;
+
+static struct nk_context*    ctx;
+static struct nk_font_atlas* atlas;
 
 void
 init_renderer( void );
@@ -88,6 +95,11 @@ on_init()
 	};
 
 	create_buffer( device, &buffer_info, &ubo_buffer );
+
+	f32 color[ 4 ] = { 0.3, 0.0f, 0.4, 1.0f };
+	map_memory( device, ubo_buffer );
+	memcpy( ubo_buffer->mapped_memory, color, sizeof( color ) );
+	unmap_memory( device, ubo_buffer );
 
 	struct SamplerInfo sampler_info = {
 		.mag_filter        = FT_FILTER_LINEAR,
@@ -175,13 +187,6 @@ on_update( f32 delta_time )
 {
 	begin_frame();
 
-	f32 r          = ( f32 ) ( sin( get_time() / 1000 ) * 255.0 );
-	f32 b          = ( f32 ) ( cos( get_time() / 1000 ) * 255.0 );
-	f32 color[ 4 ] = { r, 0.0f, b, 1.0f };
-	map_memory( device, ubo_buffer );
-	memcpy( ubo_buffer->mapped_memory, color, sizeof( color ) );
-	unmap_memory( device, ubo_buffer );
-
 	struct CommandBuffer* cmd = frames[ frame_index ].cmd;
 
 	begin_command_buffer( cmd );
@@ -250,33 +255,42 @@ on_shutdown()
 	shutdown_renderer();
 }
 
+static void
+create_vulkan_surface_glfw( void* w, void* i, void** s )
+{
+	GLFWwindow* glfw_window = ( GLFWwindow* ) w;
+	VkInstance  instance    = ( VkInstance ) i;
+	VkSurfaceKHR surface;
+	glfwCreateWindowSurface( instance, glfw_window, NULL, &surface );
+	*s = surface;
+}
+
 int
 main( int argc, char** argv )
 {
-	struct WindowInfo window_info = {};
-	window_info.title             = "fluent-sandbox";
-	window_info.x                 = 100;
-	window_info.y                 = 100;
-	window_info.width             = WINDOW_WIDTH;
-	window_info.height            = WINDOW_HEIGHT;
-	window_info.resizable         = 0;
-	window_info.centered          = 1;
-	window_info.fullscreen        = 0;
-	window_info.grab_mouse        = 0;
-
-	struct ApplicationConfig config = {};
-	config.argc                     = argc;
-	config.argv                     = argv;
-	config.window_info              = window_info;
-	config.log_level                = FT_TRACE;
-	config.on_init                  = on_init;
-	config.on_update                = on_update;
-	config.on_resize                = on_resize;
-	config.on_shutdown              = on_shutdown;
-
-	app_init( &config );
-	app_run();
-	app_shutdown();
+	log_init( FT_TRACE );
+	
+	glfwInit();
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint( GLFW_RESIZABLE, GLFW_FALSE );
+	window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "test_wsi", NULL, NULL);
+	glfw_wsi.vulkan_instance_extensions = glfwGetRequiredInstanceExtensions(&glfw_wsi.vulkan_instance_extension_count);
+	glfw_wsi.window = window;
+	glfw_wsi.create_vulkan_surface = create_vulkan_surface_glfw;
+	
+	on_init();
+	
+	while (!glfwWindowShouldClose(window)) 
+	{
+		on_update( 0.0f );
+		glfwPollEvents();
+	}
+	
+	on_shutdown();
+	
+	glfwTerminate();
+	
+	log_shutdown();
 
 	return EXIT_SUCCESS;
 }
@@ -286,7 +300,7 @@ init_renderer()
 {
 	struct RendererBackendInfo backend_info = {};
 	backend_info.api                        = renderer_api;
-	backend_info.wsi_info                   = get_ft_wsi_info();
+	backend_info.wsi_info                   = &glfw_wsi;
 	create_renderer_backend( &backend_info, &backend );
 
 	struct DeviceInfo device_info = {};
@@ -314,14 +328,13 @@ init_renderer()
 	}
 
 	struct SwapchainInfo swapchain_info = {};
-	window_get_size( get_app_window(),
-	                 &swapchain_info.width,
-	                 &swapchain_info.height );
-	swapchain_info.format          = FT_FORMAT_B8G8R8A8_SRGB;
-	swapchain_info.min_image_count = FRAME_COUNT;
-	swapchain_info.vsync           = 1;
-	swapchain_info.queue           = graphics_queue;
-	swapchain_info.wsi_info        = get_ft_wsi_info();
+	swapchain_info.width                = WINDOW_WIDTH;
+	swapchain_info.height               = WINDOW_HEIGHT;
+	swapchain_info.format               = FT_FORMAT_B8G8R8A8_SRGB;
+	swapchain_info.min_image_count      = FRAME_COUNT;
+	swapchain_info.vsync                = 1;
+	swapchain_info.queue                = graphics_queue;
+	swapchain_info.wsi_info             = &glfw_wsi;
 	create_swapchain( device, &swapchain_info, &swapchain );
 }
 
