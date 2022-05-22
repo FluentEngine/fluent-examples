@@ -19,4 +19,4 @@ then
 end
 
 include "fluent/fluent-engine.lua"
-include "sandbox/premake5.lua"
+include "examples/premake5.lua"

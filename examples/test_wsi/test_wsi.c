@@ -96,7 +96,7 @@ on_init()
 
 	create_buffer( device, &buffer_info, &ubo_buffer );
 
-	f32 color[ 4 ] = { 0.3, 0.0f, 0.4, 1.0f };
+	f32 color[ 4 ] = { 0.3f, 0.0f, 0.4f, 1.0f };
 	map_memory( device, ubo_buffer );
 	memcpy( ubo_buffer->mapped_memory, color, sizeof( color ) );
 	unmap_memory( device, ubo_buffer );

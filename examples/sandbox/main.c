@@ -1,4 +1,3 @@
-#include <math.h>
 #include <fluent/os.h>
 #include <fluent/renderer.h>
 
@@ -20,6 +19,12 @@ struct FrameData
 	b32                   cmd_recorded;
 };
 
+struct ShaderData
+{
+	mat4x4 projection;
+	mat4x4 view;
+};
+
 static enum RendererAPI        renderer_api   = FT_RENDERER_API_VULKAN;
 static struct RendererBackend* backend        = NULL;
 static struct Device*          device         = NULL;
@@ -35,6 +40,11 @@ static struct Buffer*              ubo_buffer = NULL;
 static struct Sampler*             sampler    = NULL;
 static struct Image*               texture    = NULL;
 static struct DescriptorSet*       set        = NULL;
+
+static struct Camera           camera;
+static struct CameraController camera_controller;
+
+static struct ShaderData shader_data;
 
 void
 init_renderer( void );
@@ -54,6 +64,26 @@ on_init()
 
 	resource_loader_init( device, 20 * 1024 * 1024 * 8 );
 
+	vec3 position  = { 0.0f, 0.0f, 3.0f };
+	vec3 direction = { 0.0f, 0.0f, -1.0f };
+	vec3 up        = { 0.0f, 1.0f, 0.0f };
+
+	struct CameraInfo camera_info = {};
+	camera_info.fov = radians( 45.0f );
+	camera_info.aspect            = window_get_aspect( get_app_window() );
+	camera_info.near              = 0.1f;
+	camera_info.far               = 1000.0f;
+	vec3_dup( camera_info.position, position );
+	vec3_dup( camera_info.direction, direction );
+	vec3_dup( camera_info.up, up );
+	camera_info.speed       = 5.0f;
+	camera_info.sensitivity = 0.12f;
+
+	camera_init( &camera, &camera_info );
+	camera_controller_init( &camera_controller, &camera );
+
+	mat4x4_dup( shader_data.projection, camera.projection );
+
 	struct ShaderInfo shader_info      = {};
 	shader_info.vertex.bytecode_size   = sizeof( shader_main_vert );
 	shader_info.vertex.bytecode        = shader_main_vert;
@@ -68,14 +98,14 @@ on_init()
 	struct PipelineInfo pipeline_info           = {};
 	pipeline_info.shader                        = shader;
 	pipeline_info.rasterizer_info.cull_mode     = FT_CULL_MODE_NONE;
-	pipeline_info.rasterizer_info.front_face    = FT_FRONT_FACE_CLOCKWISE;
+	pipeline_info.rasterizer_info.front_face    = FT_FRONT_FACE_COUNTER_CLOCKWISE;
 	pipeline_info.depth_state_info.depth_test   = 0;
 	pipeline_info.depth_state_info.depth_write  = 0;
 	pipeline_info.descriptor_set_layout         = dsl;
 	pipeline_info.sample_count                  = 1;
 	pipeline_info.color_attachment_count        = 1;
 	pipeline_info.color_attachment_formats[ 0 ] = swapchain->format;
-	pipeline_info.topology = FT_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+	pipeline_info.topology = FT_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
 	create_graphics_pipeline( device, &pipeline_info, &pipeline );
 
@@ -84,7 +114,7 @@ on_init()
 	struct BufferInfo buffer_info = {
 		.descriptor_type = FT_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 		.memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU,
-		.size            = sizeof( float[ 4 ] ),
+		.size            = sizeof( struct ShaderData ),
 	};
 
 	create_buffer( device, &buffer_info, &ubo_buffer );
@@ -136,7 +166,7 @@ on_init()
 	struct BufferDescriptor buffer_descriptor = {
 		.buffer = ubo_buffer,
 		.offset = 0,
-		.range  = sizeof( float[ 4 ] ),
+		.range  = sizeof( struct ShaderData ),
 	};
 
 	struct SamplerDescriptor sampler_descriptor = { .sampler = sampler };
@@ -173,14 +203,20 @@ on_init()
 static void
 on_update( f32 delta_time )
 {
-	begin_frame();
+	if ( is_key_pressed( FT_KEY_LEFT_ALT ) )
+	{
+		camera_controller_update( &camera_controller, delta_time );
+	}
 
-	f32 r          = ( f32 ) ( sin( get_time() / 1000 ) * 255.0 );
-	f32 b          = ( f32 ) ( cos( get_time() / 1000 ) * 255.0 );
-	f32 color[ 4 ] = { r, 0.0f, b, 1.0f };
+	mat4x4_dup( shader_data.view, camera.view );
+	mat4x4_dup( shader_data.projection, camera.projection );
 	map_memory( device, ubo_buffer );
-	memcpy( ubo_buffer->mapped_memory, color, sizeof( color ) );
+	memcpy( ubo_buffer->mapped_memory,
+	        &shader_data,
+	        sizeof( struct ShaderData ) );
 	unmap_memory( device, ubo_buffer );
+
+	begin_frame();
 
 	struct CommandBuffer* cmd = frames[ frame_index ].cmd;
 
@@ -217,7 +253,7 @@ on_update( f32 delta_time )
 	                  1 );
 	cmd_bind_descriptor_set( cmd, 0, set, pipeline );
 	cmd_bind_pipeline( cmd, pipeline );
-	cmd_draw( cmd, 4, 1, 0, 0 );
+	cmd_draw( cmd, 6, 1, 0, 0 );
 	cmd_end_render_pass( cmd );
 
 	barrier.old_state = FT_RESOURCE_STATE_COLOR_ATTACHMENT;
