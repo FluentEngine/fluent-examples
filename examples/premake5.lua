@@ -60,6 +60,11 @@ commons.example("sandbox")
 
 	commons.compile_shaders("sandbox")
 
+commons.example("render_graph")
+	files {
+		"render_graph/main.c"
+	}
+	
 commons.example("test_wsi")
     files {
         "test_wsi/test_wsi.c",
@@ -68,8 +73,8 @@ commons.example("test_wsi")
         "test_wsi/main.frag.ft"
     }
 
-	links {		
-		"glfw"	
-	}
+	links { 
+        "glfw"
+    }
 	
 	commons.compile_shaders("test_wsi")

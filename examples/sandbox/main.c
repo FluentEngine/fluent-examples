@@ -5,8 +5,8 @@
 #include "main.frag.h"
 
 #define FRAME_COUNT   2
-#define WINDOW_WIDTH  800
-#define WINDOW_HEIGHT 600
+#define WINDOW_WIDTH  600
+#define WINDOW_HEIGHT 480
 
 struct FrameData
 {
@@ -34,6 +34,8 @@ static struct FrameData        frames[ FRAME_COUNT ];
 static u32                     frame_index = 0;
 static u32                     image_index = 0;
 
+static struct RenderGraph* graph = NULL;
+
 static struct Pipeline*            pipeline   = NULL;
 static struct DescriptorSetLayout* dsl        = NULL;
 static struct Buffer*              ubo_buffer = NULL;
@@ -45,10 +47,6 @@ static struct Camera           camera;
 static struct CameraController camera_controller;
 
 static struct ShaderData shader_data;
-
-static struct nk_context*    ctx;
-static struct nk_colorf      background = { 0.0f, 0.0f, 0.0f, 1.0f };
-static struct nk_font_atlas* atlas;
 
 void
 init_renderer( void );
@@ -207,14 +205,7 @@ on_init()
 	create_descriptor_set( device, &set_info, &set );
 	update_descriptor_set( device, set, 3, descriptor_writes );
 
-	ctx = nk_ft_init( get_ft_wsi_info(),
-	                  device,
-	                  graphics_queue,
-	                  swapchain->format,
-	                  FT_FORMAT_UNDEFINED );
-
-	nk_ft_font_stash_begin( &atlas );
-	nk_ft_font_stash_end();
+	rg_init( device, &graph );
 }
 
 static void
@@ -228,7 +219,7 @@ on_update( f32 delta_time )
 	{
 		camera_controller_reset( &camera_controller );
 	}
-	
+
 	mat4x4_dup( shader_data.view, camera.view );
 	mat4x4_dup( shader_data.projection, camera.projection );
 	map_memory( device, ubo_buffer );
@@ -250,8 +241,8 @@ on_update( f32 delta_time )
 
 	struct RenderPassBeginInfo rp_info     = {};
 	rp_info.device                         = device;
-	rp_info.width                          = WINDOW_WIDTH;
-	rp_info.height                         = WINDOW_HEIGHT;
+	rp_info.width                          = swapchain->width;
+	rp_info.height                         = swapchain->height;
 	rp_info.color_attachment_count         = 1;
 	rp_info.color_attachments[ 0 ]         = swapchain->images[ image_index ];
 	rp_info.color_attachment_load_ops[ 0 ] = FT_ATTACHMENT_LOAD_OP_CLEAR;
@@ -276,42 +267,6 @@ on_update( f32 delta_time )
 	cmd_bind_pipeline( cmd, pipeline );
 	cmd_draw( cmd, 6, 1, 0, 0 );
 
-	nk_ft_new_frame();
-
-	if ( nk_begin( ctx,
-	               "sandbox",
-	               nk_rect( 50, 50, 230, 250 ),
-	               NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE |
-	                   NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE ) )
-	{
-		nk_layout_row_static( ctx, 30, 80, 1 );
-		if ( nk_button_label( ctx, "button" ) )
-			fprintf( stdout, "button pressed\n" );
-
-		nk_layout_row_dynamic( ctx, 30, 2 );
-
-		nk_option_label( ctx, "up", 1 );
-
-		nk_layout_row_dynamic( ctx, 25, 1 );
-		i32 zoom;
-		nk_property_int( ctx, "Zoom:", 0, &zoom, 100, 10, 1 );
-
-		nk_layout_row_dynamic( ctx, 20, 1 );
-		nk_label( ctx, "background:", NK_TEXT_LEFT );
-		nk_layout_row_dynamic( ctx, 25, 1 );
-		if ( nk_combo_begin_color( ctx,
-		                           nk_rgb_cf( background ),
-		                           nk_vec2( nk_widget_width( ctx ), 400 ) ) )
-		{
-			nk_layout_row_dynamic( ctx, 120, 1 );
-			background = nk_color_picker( ctx, background, NK_RGBA );
-			nk_layout_row_dynamic( ctx, 25, 1 );
-			nk_combo_end( ctx );
-		}
-	}
-	nk_end( ctx );
-	nk_ft_render( cmd, NK_ANTI_ALIASING_ON );
-
 	cmd_end_render_pass( cmd );
 
 	barrier.old_state = FT_RESOURCE_STATE_COLOR_ATTACHMENT;
@@ -327,14 +282,15 @@ on_update( f32 delta_time )
 static void
 on_resize( u32 width, u32 height )
 {
-	// TODO:
+	queue_wait_idle( graphics_queue );
+	resize_swapchain( device, swapchain, width, height );
 }
 
 static void
 on_shutdown()
 {
 	queue_wait_idle( graphics_queue );
-	nk_ft_shutdown();
+	rg_shutdown( graph );
 	destroy_image( device, texture );
 	destroy_sampler( device, sampler );
 	destroy_buffer( device, ubo_buffer );
