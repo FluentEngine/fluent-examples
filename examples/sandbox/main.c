@@ -5,8 +5,8 @@
 #include "main.frag.h"
 
 #define FRAME_COUNT   2
-#define WINDOW_WIDTH  640
-#define WINDOW_HEIGHT 480
+#define WINDOW_WIDTH  800
+#define WINDOW_HEIGHT 600
 
 struct FrameData
 {
@@ -46,6 +46,10 @@ static struct CameraController camera_controller;
 
 static struct ShaderData shader_data;
 
+static struct nk_context*    ctx;
+static struct nk_colorf      background = { 0.0f, 0.0f, 0.0f, 1.0f };
+static struct nk_font_atlas* atlas;
+
 void
 init_renderer( void );
 
@@ -69,7 +73,7 @@ on_init()
 	vec3 up        = { 0.0f, 1.0f, 0.0f };
 
 	struct CameraInfo camera_info = {};
-	camera_info.fov = radians( 45.0f );
+	camera_info.fov               = radians( 45.0f );
 	camera_info.aspect            = window_get_aspect( get_app_window() );
 	camera_info.near              = 0.1f;
 	camera_info.far               = 1000.0f;
@@ -95,11 +99,11 @@ on_init()
 
 	create_descriptor_set_layout( device, shader, &dsl );
 
-	struct PipelineInfo pipeline_info           = {};
-	pipeline_info.shader                        = shader;
-	pipeline_info.rasterizer_info.cull_mode     = FT_CULL_MODE_NONE;
-	pipeline_info.rasterizer_info.front_face    = FT_FRONT_FACE_COUNTER_CLOCKWISE;
-	pipeline_info.depth_state_info.depth_test   = 0;
+	struct PipelineInfo pipeline_info         = {};
+	pipeline_info.shader                      = shader;
+	pipeline_info.rasterizer_info.cull_mode   = FT_CULL_MODE_NONE;
+	pipeline_info.rasterizer_info.front_face  = FT_FRONT_FACE_COUNTER_CLOCKWISE;
+	pipeline_info.depth_state_info.depth_test = 0;
 	pipeline_info.depth_state_info.depth_write  = 0;
 	pipeline_info.descriptor_set_layout         = dsl;
 	pipeline_info.sample_count                  = 1;
@@ -141,7 +145,7 @@ on_init()
 		.width           = 2,
 		.height          = 2,
 		.depth           = 1,
-		.format          = FT_FORMAT_R8G8B8A8_UNORM,
+		.format          = FT_FORMAT_R8G8B8A8_SRGB,
 		.sample_count    = 1,
 		.mip_levels      = 1,
 		.layer_count     = 1,
@@ -160,8 +164,10 @@ on_init()
 	}
 	upload_image( texture, sizeof( image_data ), image_data );
 
-	struct DescriptorSetInfo set_info = { .descriptor_set_layout = dsl,
-		                                  .set                   = 0 };
+	struct DescriptorSetInfo set_info = {
+		.descriptor_set_layout = dsl,
+		.set                   = 0,
+	};
 
 	struct BufferDescriptor buffer_descriptor = {
 		.buffer = ubo_buffer,
@@ -169,11 +175,13 @@ on_init()
 		.range  = sizeof( struct ShaderData ),
 	};
 
-	struct SamplerDescriptor sampler_descriptor = { .sampler = sampler };
+	struct SamplerDescriptor sampler_descriptor = {
+		.sampler = sampler,
+	};
 
 	struct ImageDescriptor image_descriptor = {
 		.image          = texture,
-		.resource_state = FT_RESOURCE_STATE_SHADER_READ_ONLY
+		.resource_state = FT_RESOURCE_STATE_SHADER_READ_ONLY,
 	};
 
 	struct DescriptorWrite descriptor_writes[ 3 ];
@@ -198,6 +206,15 @@ on_init()
 
 	create_descriptor_set( device, &set_info, &set );
 	update_descriptor_set( device, set, 3, descriptor_writes );
+
+	ctx = nk_ft_init( get_ft_wsi_info(),
+	                  device,
+	                  graphics_queue,
+	                  swapchain->format,
+	                  FT_FORMAT_UNDEFINED );
+
+	nk_ft_font_stash_begin( &atlas );
+	nk_ft_font_stash_end();
 }
 
 static void
@@ -207,7 +224,11 @@ on_update( f32 delta_time )
 	{
 		camera_controller_update( &camera_controller, delta_time );
 	}
-
+	else
+	{
+		camera_controller_reset( &camera_controller );
+	}
+	
 	mat4x4_dup( shader_data.view, camera.view );
 	mat4x4_dup( shader_data.projection, camera.projection );
 	map_memory( device, ubo_buffer );
@@ -254,6 +275,43 @@ on_update( f32 delta_time )
 	cmd_bind_descriptor_set( cmd, 0, set, pipeline );
 	cmd_bind_pipeline( cmd, pipeline );
 	cmd_draw( cmd, 6, 1, 0, 0 );
+
+	nk_ft_new_frame();
+
+	if ( nk_begin( ctx,
+	               "sandbox",
+	               nk_rect( 50, 50, 230, 250 ),
+	               NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE |
+	                   NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE ) )
+	{
+		nk_layout_row_static( ctx, 30, 80, 1 );
+		if ( nk_button_label( ctx, "button" ) )
+			fprintf( stdout, "button pressed\n" );
+
+		nk_layout_row_dynamic( ctx, 30, 2 );
+
+		nk_option_label( ctx, "up", 1 );
+
+		nk_layout_row_dynamic( ctx, 25, 1 );
+		i32 zoom;
+		nk_property_int( ctx, "Zoom:", 0, &zoom, 100, 10, 1 );
+
+		nk_layout_row_dynamic( ctx, 20, 1 );
+		nk_label( ctx, "background:", NK_TEXT_LEFT );
+		nk_layout_row_dynamic( ctx, 25, 1 );
+		if ( nk_combo_begin_color( ctx,
+		                           nk_rgb_cf( background ),
+		                           nk_vec2( nk_widget_width( ctx ), 400 ) ) )
+		{
+			nk_layout_row_dynamic( ctx, 120, 1 );
+			background = nk_color_picker( ctx, background, NK_RGBA );
+			nk_layout_row_dynamic( ctx, 25, 1 );
+			nk_combo_end( ctx );
+		}
+	}
+	nk_end( ctx );
+	nk_ft_render( cmd, NK_ANTI_ALIASING_ON );
+
 	cmd_end_render_pass( cmd );
 
 	barrier.old_state = FT_RESOURCE_STATE_COLOR_ATTACHMENT;
@@ -276,6 +334,7 @@ static void
 on_shutdown()
 {
 	queue_wait_idle( graphics_queue );
+	nk_ft_shutdown();
 	destroy_image( device, texture );
 	destroy_sampler( device, sampler );
 	destroy_buffer( device, ubo_buffer );
