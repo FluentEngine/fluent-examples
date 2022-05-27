@@ -1,5 +1,5 @@
 build/
-fluent/
+deps/
 **/.vscode/
 
 *.bin

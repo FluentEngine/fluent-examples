@@ -34,8 +34,6 @@ static struct FrameData        frames[ FRAME_COUNT ];
 static u32                     frame_index = 0;
 static u32                     image_index = 0;
 
-static struct RenderGraph* graph = NULL;
-
 static struct Pipeline*            pipeline   = NULL;
 static struct DescriptorSetLayout* dsl        = NULL;
 static struct Buffer*              ubo_buffer = NULL;
@@ -204,8 +202,6 @@ on_init()
 
 	create_descriptor_set( device, &set_info, &set );
 	update_descriptor_set( device, set, 3, descriptor_writes );
-
-	rg_init( device, &graph );
 }
 
 static void
@@ -290,7 +286,6 @@ static void
 on_shutdown()
 {
 	queue_wait_idle( graphics_queue );
-	rg_shutdown( graph );
 	destroy_image( device, texture );
 	destroy_sampler( device, sampler );
 	destroy_buffer( device, ubo_buffer );

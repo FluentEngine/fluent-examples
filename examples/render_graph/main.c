@@ -25,8 +25,6 @@ static struct FrameData        frames[ FRAME_COUNT ];
 static u32                     frame_index = 0;
 static u32                     image_index = 0;
 
-static struct RenderGraph* graph = NULL;
-
 void
 init_renderer( void );
 
@@ -42,7 +40,6 @@ static void
 on_init()
 {
 	init_renderer();
-	rg_init( device, &graph );
 }
 
 static void
@@ -54,10 +51,7 @@ on_update( f32 delta_time )
 
 	struct CommandBuffer* cmd = frames[ frame_index ].cmd;
 	begin_command_buffer( cmd );
-	
-	rg_setup_attachments( graph, swapchain->images[ image_index ] );
-	rg_execute( graph, cmd );
-	
+
 	end_command_buffer( cmd );
 
 	end_frame();
@@ -74,7 +68,6 @@ static void
 on_shutdown()
 {
 	queue_wait_idle( graphics_queue );
-	rg_shutdown( graph );
 	shutdown_renderer();
 }
 
@@ -151,6 +144,8 @@ init_renderer()
 	swapchain_info.queue           = graphics_queue;
 	swapchain_info.wsi_info        = get_ft_wsi_info();
 	create_swapchain( device, &swapchain_info, &swapchain );
+
+	resource_loader_init( device, 25 * 1024 * 1024 * 8 );
 }
 
 void

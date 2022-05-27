@@ -14,21 +14,22 @@ project(name)
 	filter {}
 	
 	includedirs {
-        "../fluent/sources",
-        "../fluent/sources/third_party/",
+        "../deps/fluent/sources",
+        "../deps/fluent/sources/third_party/",
+        "../deps/SDL/include"
     }
     
 	links { 
         "ft_renderer", 
         "ft_os", 
         "ft_log", 
-        "SDL2",
         "hashmap_c",
         "spirv_reflect",
         "tiny_image_format",
         "vk_mem_alloc",
         "volk",
-        "m"
+        "m",
+        "sdl2",
     }
 end
 
@@ -62,8 +63,10 @@ commons.example("sandbox")
 
 commons.example("render_graph")
 	files {
-		"render_graph/main.c"
+		"render_graph/main.c",
 	}
+	
+	commons.compile_shaders("render_graph")
 	
 commons.example("test_wsi")
     files {
