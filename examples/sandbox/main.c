@@ -62,8 +62,6 @@ on_init()
 {
 	init_renderer();
 
-	resource_loader_init( device, 20 * 1024 * 1024 * 8 );
-
 	vec3 position  = { 0.0f, 0.0f, 3.0f };
 	vec3 direction = { 0.0f, 0.0f, -1.0f };
 	vec3 up        = { 0.0f, 1.0f, 0.0f };
@@ -292,7 +290,6 @@ on_shutdown()
 	destroy_descriptor_set( device, set );
 	destroy_descriptor_set_layout( device, dsl );
 	destroy_pipeline( device, pipeline );
-	resource_loader_shutdown();
 	shutdown_renderer();
 }
 

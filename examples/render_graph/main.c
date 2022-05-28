@@ -144,8 +144,6 @@ init_renderer()
 	swapchain_info.queue           = graphics_queue;
 	swapchain_info.wsi_info        = get_ft_wsi_info();
 	create_swapchain( device, &swapchain_info, &swapchain );
-
-	resource_loader_init( device, 25 * 1024 * 1024 * 8 );
 }
 
 void

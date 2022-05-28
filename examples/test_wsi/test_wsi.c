@@ -59,8 +59,6 @@ on_init()
 {
 	init_renderer();
 
-	resource_loader_init( device, 20 * 1024 * 1024 * 8 );
-
 	struct ShaderInfo shader_info      = {};
 	shader_info.vertex.bytecode_size   = sizeof( shader_main_vert );
 	shader_info.vertex.bytecode        = shader_main_vert;
@@ -251,7 +249,6 @@ on_shutdown()
 	destroy_descriptor_set( device, set );
 	destroy_descriptor_set_layout( device, dsl );
 	destroy_pipeline( device, pipeline );
-	resource_loader_shutdown();
 	shutdown_renderer();
 }
 
