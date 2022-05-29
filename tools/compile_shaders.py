@@ -37,7 +37,7 @@ if __name__ == "__main__":
 		elif 'comp' in args.input:
 			stage = 'comp'
 			
-		subprocess.call(['glslangValidator', '-S', stage, '-D', '-e', 'main', '-V', '-I' + current_dir,
+		subprocess.call(['glslangValidator', '-DFT_VULKAN', '-S', stage, '-D', '-e', 'main', '-V', '-I' + current_dir,
 						args.input, '--vn', 'shader_' + array_name.replace('_ft', ''), '-o', args.output ])
 
 	if dxil:

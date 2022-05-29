@@ -24,6 +24,7 @@ project(name)
         "ft_os", 
         "ft_log", 
         "hashmap_c",
+        "cgltf",
         "spirv_reflect",
         "tiny_image_format",
         "vk_mem_alloc",
@@ -65,8 +66,6 @@ commons.example("render_graph")
 	files {
 		"render_graph/main.c",
 	}
-	
-	commons.compile_shaders("render_graph")
 	
 commons.example("test_wsi")
     files {

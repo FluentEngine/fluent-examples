@@ -31,10 +31,7 @@
 #endif
 
 #ifdef FT_VULKAN
-    #define push_constant(name, binding) \
-	[[vk::binding(binding)]]
-	[[vk::push_constant]] \
-	cbuffer name
+    #define push_constant(name) [[vk::push_constant]] cbuffer name
 #else
-    #define push_constant(name, binding) cbuffer name
+    #define push_constant(name) cbuffer name
 #endif

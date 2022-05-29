@@ -9,22 +9,30 @@ cbuf(ubo, 0)
     float4x4 view;
 };
 
+StructuredBuffer<float4x4> u_transforms : register(t1);
+
+push_constant(pc)
+{
+	uint instance_id; // D3D12 and vulkan instance id not same
+}
+
 struct Input
 {
-    uint vertex_index : SV_VertexID;
+	float3 position : POSITION;
+    float3 normal : NORMAL;
+    float2 tex_coord : TEXCOORD0;
 };
 
 struct Output
 {
     float4 position : SV_Position;
-    float3 color : TEXCOORD0;
+    float3 normal : NORMAL0;
 };
 
 Output main(Input stage_input)
 {
-    int vertex_index = int(stage_input.vertex_index);
     Output stage_output;
-	stage_output.position = mul(projection, mul(view, float4(positions[vertex_index], 0.0, 1.0)));
-	stage_output.color = colors[vertex_index];
+	stage_output.position = mul(projection, mul(view, mul(u_transforms[ instance_id ], float4(stage_input.position, 1.0))));
+	stage_output.normal = mul(float3x3(u_transforms[ instance_id ]), stage_input.normal);
     return stage_output;
 }

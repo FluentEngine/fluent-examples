@@ -1,23 +1,18 @@
-#include <fluent/os.h>
-#include <fluent/renderer.h>
+#include "common.h"
+
+#include "renderer/scene/model_loader.h"
 
 #include "main.vert.h"
 #include "main.frag.h"
 
-#define FRAME_COUNT   2
 #define WINDOW_WIDTH  600
 #define WINDOW_HEIGHT 480
 
-struct FrameData
-{
-	struct Semaphore* present_semaphore;
-	struct Semaphore* render_semaphore;
-	struct Fence*     render_fence;
+#define MODEL_PATH "../examples/sandbox/dragon/DragonAttenuation.gltf"
 
-	struct CommandPool*   cmd_pool;
-	struct CommandBuffer* cmd;
-	b32                   cmd_recorded;
-};
+#define VERTEX_BUFFER_SIZE 10 * 1024 * 1024 * 8
+#define INDEX_BUFFER_SIZE  5 * 1024 * 1024 * 8
+#define MAX_GEOMETRY_COUNT 100
 
 struct ShaderData
 {
@@ -25,37 +20,50 @@ struct ShaderData
 	mat4x4 view;
 };
 
-static enum RendererAPI        renderer_api   = FT_RENDERER_API_VULKAN;
-static struct RendererBackend* backend        = NULL;
-static struct Device*          device         = NULL;
-static struct Queue*           graphics_queue = NULL;
-static struct Swapchain*       swapchain      = NULL;
-static struct FrameData        frames[ FRAME_COUNT ];
-static u32                     frame_index = 0;
-static u32                     image_index = 0;
+struct Vertex
+{
+	vec3 position;
+	vec3 normal;
+	vec2 texcoord;
+};
 
-static struct Pipeline*            pipeline   = NULL;
-static struct DescriptorSetLayout* dsl        = NULL;
-static struct Buffer*              ubo_buffer = NULL;
-static struct Sampler*             sampler    = NULL;
-static struct Image*               texture    = NULL;
-static struct DescriptorSet*       set        = NULL;
+struct Geometry
+{
+	i32    first_vertex;
+	u32    first_index;
+	u32    index_count;
+	b32    is_32;
+	mat4x4 model;
+};
+
+static struct Pipeline*            pipeline = NULL;
+static struct DescriptorSetLayout* dsl      = NULL;
+
+static struct DescriptorSet* set = NULL;
+
+static struct Buffer*  vertex_buffer   = NULL;
+static struct Buffer*  index_buffer_32 = NULL;
+static struct Buffer*  index_buffer_16 = NULL;
+static struct Buffer*  ubo_buffer      = NULL;
+static struct Sampler* sampler         = NULL;
 
 static struct Camera           camera;
 static struct CameraController camera_controller;
 
 static struct ShaderData shader_data;
 
-void
-init_renderer( void );
+u32                    geometry_count = 0;
+static struct Geometry geometries[ MAX_GEOMETRY_COUNT ];
+static struct Buffer*  transforms_buffer;
 
-void
-shutdown_renderer( void );
+static void
+write_descriptors();
+static void
+load_scene();
 
-void
-begin_frame( void );
-void
-end_frame( void );
+static void updata_camera_ubo( f32 );
+static void
+draw_scene( struct CommandBuffer* );
 
 static void
 on_init()
@@ -93,7 +101,26 @@ on_init()
 
 	create_descriptor_set_layout( device, shader, &dsl );
 
-	struct PipelineInfo pipeline_info         = {};
+	struct PipelineInfo  pipeline_info = {};
+	struct VertexLayout* l             = &pipeline_info.vertex_layout;
+	l->binding_info_count              = 1;
+	l->binding_infos[ 0 ].binding      = 0;
+	l->binding_infos[ 0 ].input_rate   = FT_VERTEX_INPUT_RATE_VERTEX;
+	l->binding_infos[ 0 ].stride       = sizeof( struct Vertex );
+	l->attribute_info_count            = 3;
+	l->attribute_infos[ 0 ].binding    = 0;
+	l->attribute_infos[ 0 ].format     = FT_FORMAT_R32G32B32_SFLOAT;
+	l->attribute_infos[ 0 ].location   = 0;
+	l->attribute_infos[ 0 ].offset     = offsetof( struct Vertex, position );
+	l->attribute_infos[ 1 ].binding    = 0;
+	l->attribute_infos[ 1 ].format     = FT_FORMAT_R32G32B32_SFLOAT;
+	l->attribute_infos[ 1 ].location   = 1;
+	l->attribute_infos[ 1 ].offset     = offsetof( struct Vertex, normal );
+	l->attribute_infos[ 2 ].binding    = 0;
+	l->attribute_infos[ 2 ].format     = FT_FORMAT_R32G32_SFLOAT;
+	l->attribute_infos[ 2 ].location   = 2;
+	l->attribute_infos[ 2 ].offset     = offsetof( struct Vertex, texcoord );
+
 	pipeline_info.shader                      = shader;
 	pipeline_info.rasterizer_info.cull_mode   = FT_CULL_MODE_NONE;
 	pipeline_info.rasterizer_info.front_face  = FT_FRONT_FACE_COUNTER_CLOCKWISE;
@@ -103,6 +130,10 @@ on_init()
 	pipeline_info.sample_count                  = 1;
 	pipeline_info.color_attachment_count        = 1;
 	pipeline_info.color_attachment_formats[ 0 ] = swapchain->format;
+	pipeline_info.depth_stencil_format          = depth_image->format;
+	pipeline_info.depth_state_info.compare_op   = FT_COMPARE_OP_LESS;
+	pipeline_info.depth_state_info.depth_test   = 1;
+	pipeline_info.depth_state_info.depth_write  = 1;
 	pipeline_info.topology = FT_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
 	create_graphics_pipeline( device, &pipeline_info, &pipeline );
@@ -117,110 +148,14 @@ on_init()
 
 	create_buffer( device, &buffer_info, &ubo_buffer );
 
-	struct SamplerInfo sampler_info = {
-		.mag_filter        = FT_FILTER_LINEAR,
-		.min_filter        = FT_FILTER_LINEAR,
-		.mipmap_mode       = FT_SAMPLER_MIPMAP_MODE_NEAREST,
-		.address_mode_u    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
-		.address_mode_v    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
-		.address_mode_w    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
-		.mip_lod_bias      = 0,
-		.anisotropy_enable = 0,
-		.max_anisotropy    = 0,
-		.compare_enable    = 0,
-		.compare_op        = FT_COMPARE_OP_ALWAYS,
-		.min_lod           = 0,
-		.max_lod           = 0,
-	};
-
-	create_sampler( device, &sampler_info, &sampler );
-
-	struct ImageInfo image_info = {
-		.width           = 2,
-		.height          = 2,
-		.depth           = 1,
-		.format          = FT_FORMAT_R8G8B8A8_SRGB,
-		.sample_count    = 1,
-		.mip_levels      = 1,
-		.layer_count     = 1,
-		.descriptor_type = FT_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-	};
-
-	create_image( device, &image_info, &texture );
-
-	u8 image_data[ 4 ][ 4 ];
-	for ( u32 i = 0; i < 4; ++i )
-	{
-		image_data[ i ][ 0 ] = 90;
-		image_data[ i ][ 1 ] = 130;
-		image_data[ i ][ 2 ] = 170;
-		image_data[ i ][ 3 ] = 255;
-	}
-	upload_image( texture, sizeof( image_data ), image_data );
-
-	struct DescriptorSetInfo set_info = {
-		.descriptor_set_layout = dsl,
-		.set                   = 0,
-	};
-
-	struct BufferDescriptor buffer_descriptor = {
-		.buffer = ubo_buffer,
-		.offset = 0,
-		.range  = sizeof( struct ShaderData ),
-	};
-
-	struct SamplerDescriptor sampler_descriptor = {
-		.sampler = sampler,
-	};
-
-	struct ImageDescriptor image_descriptor = {
-		.image          = texture,
-		.resource_state = FT_RESOURCE_STATE_SHADER_READ_ONLY,
-	};
-
-	struct DescriptorWrite descriptor_writes[ 3 ];
-	memset( descriptor_writes, 0, sizeof( descriptor_writes ) );
-	descriptor_writes[ 0 ].buffer_descriptors  = &buffer_descriptor;
-	descriptor_writes[ 0 ].descriptor_count    = 1;
-	descriptor_writes[ 0 ].descriptor_name     = "ubo";
-	descriptor_writes[ 0 ].image_descriptors   = NULL;
-	descriptor_writes[ 0 ].sampler_descriptors = NULL;
-
-	descriptor_writes[ 1 ].buffer_descriptors  = NULL;
-	descriptor_writes[ 1 ].descriptor_count    = 1;
-	descriptor_writes[ 1 ].descriptor_name     = "u_sampler";
-	descriptor_writes[ 1 ].image_descriptors   = NULL;
-	descriptor_writes[ 1 ].sampler_descriptors = &sampler_descriptor;
-
-	descriptor_writes[ 2 ].buffer_descriptors  = NULL;
-	descriptor_writes[ 2 ].descriptor_count    = 1;
-	descriptor_writes[ 2 ].descriptor_name     = "u_texture";
-	descriptor_writes[ 2 ].image_descriptors   = &image_descriptor;
-	descriptor_writes[ 2 ].sampler_descriptors = NULL;
-
-	create_descriptor_set( device, &set_info, &set );
-	update_descriptor_set( device, set, 3, descriptor_writes );
+	load_scene();
+	write_descriptors();
 }
 
 static void
 on_update( f32 delta_time )
 {
-	if ( is_key_pressed( FT_KEY_LEFT_ALT ) )
-	{
-		camera_controller_update( &camera_controller, delta_time );
-	}
-	else
-	{
-		camera_controller_reset( &camera_controller );
-	}
-
-	mat4x4_dup( shader_data.view, camera.view );
-	mat4x4_dup( shader_data.projection, camera.projection );
-	map_memory( device, ubo_buffer );
-	memcpy( ubo_buffer->mapped_memory,
-	        &shader_data,
-	        sizeof( struct ShaderData ) );
-	unmap_memory( device, ubo_buffer );
+	updata_camera_ubo( delta_time );
 
 	begin_frame();
 
@@ -228,10 +163,13 @@ on_update( f32 delta_time )
 
 	begin_command_buffer( cmd );
 
-	struct ImageBarrier barrier = {};
-	barrier.image               = swapchain->images[ image_index ];
-	barrier.old_state           = FT_RESOURCE_STATE_UNDEFINED;
-	barrier.new_state           = FT_RESOURCE_STATE_COLOR_ATTACHMENT;
+	struct ImageBarrier barriers[ 2 ] = { 0 };
+	barriers[ 0 ].image               = swapchain->images[ image_index ];
+	barriers[ 0 ].old_state           = FT_RESOURCE_STATE_UNDEFINED;
+	barriers[ 0 ].new_state           = FT_RESOURCE_STATE_COLOR_ATTACHMENT;
+	barriers[ 1 ].image               = depth_image;
+	barriers[ 1 ].old_state           = FT_RESOURCE_STATE_UNDEFINED;
+	barriers[ 1 ].new_state           = FT_RESOURCE_STATE_DEPTH_STENCIL_WRITE;
 
 	struct RenderPassBeginInfo rp_info     = {};
 	rp_info.device                         = device;
@@ -241,30 +179,27 @@ on_update( f32 delta_time )
 	rp_info.color_attachments[ 0 ]         = swapchain->images[ image_index ];
 	rp_info.color_attachment_load_ops[ 0 ] = FT_ATTACHMENT_LOAD_OP_CLEAR;
 	rp_info.color_image_states[ 0 ]        = FT_RESOURCE_STATE_COLOR_ATTACHMENT;
-	rp_info.clear_values[ 0 ].color[ 0 ]   = 0.38f;
-	rp_info.clear_values[ 0 ].color[ 1 ]   = 0.30f;
-	rp_info.clear_values[ 0 ].color[ 2 ]   = 0.35f;
-	rp_info.clear_values[ 0 ].color[ 3 ]   = 1.0f;
+	rp_info.depth_stencil                  = depth_image;
+	rp_info.depth_stencil_state   = FT_RESOURCE_STATE_DEPTH_STENCIL_WRITE;
+	rp_info.depth_stencil_load_op = FT_ATTACHMENT_LOAD_OP_CLEAR;
+	rp_info.clear_values[ 0 ].color[ 0 ]            = 0.38f;
+	rp_info.clear_values[ 0 ].color[ 1 ]            = 0.30f;
+	rp_info.clear_values[ 0 ].color[ 2 ]            = 0.35f;
+	rp_info.clear_values[ 0 ].color[ 3 ]            = 1.0f;
+	rp_info.clear_values[ 1 ].depth_stencil.depth   = 1.0f;
+	rp_info.clear_values[ 1 ].depth_stencil.stencil = 0;
 
-	cmd_barrier( cmd, 0, NULL, 0, NULL, 1, &barrier );
+	cmd_barrier( cmd, 0, NULL, 0, NULL, 2, barriers );
 
 	cmd_begin_render_pass( cmd, &rp_info );
-	cmd_set_scissor( cmd, 0, 0, swapchain->width, swapchain->height );
-	cmd_set_viewport( cmd,
-	                  0,
-	                  0,
-	                  ( f32 ) swapchain->width,
-	                  ( f32 ) swapchain->height,
-	                  0,
-	                  1 );
-	cmd_bind_descriptor_set( cmd, 0, set, pipeline );
-	cmd_bind_pipeline( cmd, pipeline );
-	cmd_draw( cmd, 6, 1, 0, 0 );
-
+	draw_scene( cmd );
 	cmd_end_render_pass( cmd );
 
-	barrier.old_state = FT_RESOURCE_STATE_COLOR_ATTACHMENT;
-	barrier.new_state = FT_RESOURCE_STATE_PRESENT;
+	struct ImageBarrier barrier = {
+		.image     = swapchain->images[ image_index ],
+		.old_state = FT_RESOURCE_STATE_COLOR_ATTACHMENT,
+		.new_state = FT_RESOURCE_STATE_PRESENT,
+	};
 
 	cmd_barrier( cmd, 0, NULL, 0, NULL, 1, &barrier );
 
@@ -284,7 +219,11 @@ static void
 on_shutdown()
 {
 	queue_wait_idle( graphics_queue );
-	destroy_image( device, texture );
+	unmap_memory( device, transforms_buffer );
+	destroy_buffer( device, transforms_buffer );
+	destroy_buffer( device, index_buffer_32 );
+	destroy_buffer( device, index_buffer_16 );
+	destroy_buffer( device, vertex_buffer );
 	destroy_sampler( device, sampler );
 	destroy_buffer( device, ubo_buffer );
 	destroy_descriptor_set( device, set );
@@ -324,114 +263,229 @@ main( int argc, char** argv )
 	return EXIT_SUCCESS;
 }
 
-void
-init_renderer()
+static void
+write_descriptors()
 {
-	struct RendererBackendInfo backend_info = {};
-	backend_info.api                        = renderer_api;
-	backend_info.wsi_info                   = get_ft_wsi_info();
-	create_renderer_backend( &backend_info, &backend );
+	struct DescriptorSetInfo set_info = {
+		.descriptor_set_layout = dsl,
+		.set                   = 0,
+	};
 
-	struct DeviceInfo device_info = {};
-	device_info.backend           = backend;
-	create_device( backend, &device_info, &device );
+	create_descriptor_set( device, &set_info, &set );
 
-	struct QueueInfo queue_info = {};
-	queue_info.queue_type       = FT_QUEUE_TYPE_GRAPHICS;
-	create_queue( device, &queue_info, &graphics_queue );
+	struct BufferDescriptor buffer_descriptor = {
+		.buffer = ubo_buffer,
+		.offset = 0,
+		.range  = sizeof( struct ShaderData ),
+	};
 
-	for ( u32 i = 0; i < FRAME_COUNT; i++ )
-	{
-		frames[ i ].cmd_recorded = 0;
-		create_semaphore( device, &frames[ i ].present_semaphore );
-		create_semaphore( device, &frames[ i ].render_semaphore );
-		create_fence( device, &frames[ i ].render_fence );
+	struct BufferDescriptor tbuffer_descriptor = {
+		.buffer = transforms_buffer,
+		.offset = 0,
+		.range  = MAX_GEOMETRY_COUNT * sizeof( mat4x4 ),
+	};
 
-		struct CommandPoolInfo pool_info = {};
-		pool_info.queue                  = graphics_queue;
-		create_command_pool( device, &pool_info, &frames[ i ].cmd_pool );
-		create_command_buffers( device,
-		                        frames[ i ].cmd_pool,
-		                        1,
-		                        &frames[ i ].cmd );
-	}
+	struct DescriptorWrite descriptor_writes[ 2 ];
+	memset( descriptor_writes, 0, sizeof( descriptor_writes ) );
+	descriptor_writes[ 0 ].buffer_descriptors  = &buffer_descriptor;
+	descriptor_writes[ 0 ].descriptor_count    = 1;
+	descriptor_writes[ 0 ].descriptor_name     = "ubo";
+	descriptor_writes[ 0 ].image_descriptors   = NULL;
+	descriptor_writes[ 0 ].sampler_descriptors = NULL;
 
-	struct SwapchainInfo swapchain_info = {};
-	window_get_size( get_app_window(),
-	                 &swapchain_info.width,
-	                 &swapchain_info.height );
-	swapchain_info.format          = FT_FORMAT_B8G8R8A8_SRGB;
-	swapchain_info.min_image_count = FRAME_COUNT;
-	swapchain_info.vsync           = 1;
-	swapchain_info.queue           = graphics_queue;
-	swapchain_info.wsi_info        = get_ft_wsi_info();
-	create_swapchain( device, &swapchain_info, &swapchain );
+	descriptor_writes[ 1 ].buffer_descriptors  = NULL;
+	descriptor_writes[ 1 ].descriptor_count    = 1;
+	descriptor_writes[ 1 ].descriptor_name     = "u_transforms";
+	descriptor_writes[ 1 ].buffer_descriptors  = &tbuffer_descriptor;
+	descriptor_writes[ 1 ].sampler_descriptors = NULL;
+
+	update_descriptor_set( device, set, 2, descriptor_writes );
 }
 
-void
-shutdown_renderer()
+static void
+load_scene()
 {
-	queue_wait_idle( graphics_queue );
+	struct SamplerInfo sampler_info = {
+		.mag_filter        = FT_FILTER_LINEAR,
+		.min_filter        = FT_FILTER_LINEAR,
+		.mipmap_mode       = FT_SAMPLER_MIPMAP_MODE_NEAREST,
+		.address_mode_u    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
+		.address_mode_v    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
+		.address_mode_w    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
+		.mip_lod_bias      = 0,
+		.anisotropy_enable = 0,
+		.max_anisotropy    = 0,
+		.compare_enable    = 0,
+		.compare_op        = FT_COMPARE_OP_ALWAYS,
+		.min_lod           = 0,
+		.max_lod           = 0,
+	};
 
-	destroy_swapchain( device, swapchain );
+	create_sampler( device, &sampler_info, &sampler );
+	
+	struct BufferInfo buffer_info = {
+		.descriptor_type = FT_DESCRIPTOR_TYPE_VERTEX_BUFFER,
+		.memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU,
+		.size            = VERTEX_BUFFER_SIZE,
+	};
 
-	for ( u32 i = 0; i < FRAME_COUNT; i++ )
+	create_buffer( device, &buffer_info, &vertex_buffer );
+
+	buffer_info = ( struct BufferInfo ) {
+		.descriptor_type = FT_DESCRIPTOR_TYPE_INDEX_BUFFER,
+		.memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU,
+		.size            = INDEX_BUFFER_SIZE,
+	};
+
+	create_buffer( device, &buffer_info, &index_buffer_16 );
+	create_buffer( device, &buffer_info, &index_buffer_32 );
+
+	buffer_info = ( struct BufferInfo ) {
+		.descriptor_type = FT_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU,
+		.size            = sizeof( mat4x4 ) * MAX_GEOMETRY_COUNT,
+	};
+
+	create_buffer( device, &buffer_info, &transforms_buffer );
+
+	map_memory( device, transforms_buffer );
+	map_memory( device, vertex_buffer );
+	map_memory( device, index_buffer_16 );
+	map_memory( device, index_buffer_32 );
+
+	struct Model model = load_gltf( MODEL_PATH );
+
+	geometry_count = model.mesh_count;
+
+	u32 first_vertex   = 0;
+	u32 first_index_32 = 0;
+	u32 first_index_16 = 0;
+
+	for ( u32 m = 0; m < geometry_count; ++m )
 	{
-		destroy_command_buffers( device,
-		                         frames[ i ].cmd_pool,
-		                         1,
-		                         &frames[ i ].cmd );
-		destroy_command_pool( device, frames[ i ].cmd_pool );
-		destroy_fence( device, frames[ i ].render_fence );
-		destroy_semaphore( device, frames[ i ].render_semaphore );
-		destroy_semaphore( device, frames[ i ].present_semaphore );
+		const struct Mesh* mesh = &model.meshes[ m ];
+
+		geometries[ m ].index_count  = mesh->index_count;
+		geometries[ m ].first_vertex = first_vertex;
+
+		struct Vertex* vertices = vertex_buffer->mapped_memory;
+		vertices += first_vertex;
+
+		u32 p = 0;
+
+		for ( u32 v = 0; v < mesh->vertex_count; ++v )
+		{
+			vertices[ v ].position[ 0 ] = mesh->positions[ p ];
+			vertices[ v ].position[ 1 ] = mesh->positions[ p + 1 ];
+			vertices[ v ].position[ 2 ] = mesh->positions[ p + 2 ];
+
+			vertices[ v ].normal[ 0 ] = mesh->normals[ p ];
+			vertices[ v ].normal[ 1 ] = mesh->normals[ p + 1 ];
+			vertices[ v ].normal[ 2 ] = mesh->normals[ p + 2 ];
+
+			p += 3;
+		}
+
+		if ( model.meshes[ m ].is_32bit_indices )
+		{
+			geometries[ m ].first_index = first_index_32;
+			geometries[ m ].is_32       = 1;
+
+			u32* dst = index_buffer_32->mapped_memory;
+			memcpy( &dst[ first_index_32 ],
+			        mesh->indices,
+			        mesh->index_count * sizeof( u32 ) );
+
+			first_index_32 += mesh->index_count;
+		}
+		else
+		{
+			geometries[ m ].first_index = first_index_16;
+
+			u16* dst = index_buffer_16->mapped_memory;
+			memcpy( &dst[ first_index_16 ],
+			        mesh->indices,
+			        mesh->index_count * sizeof( u16 ) );
+
+			first_index_16 += mesh->index_count;
+		}
+
+		first_vertex += mesh->vertex_count;
+
+		mat4x4_dup( geometries[ m ].model, mesh->world );
 	}
 
-	destroy_queue( graphics_queue );
-	destroy_device( device );
-	destroy_renderer_backend( backend );
+	free_model( &model );
+
+	unmap_memory( device, vertex_buffer );
+	unmap_memory( device, index_buffer_32 );
+	unmap_memory( device, index_buffer_16 );
 }
 
-void
-begin_frame()
+static void
+updata_camera_ubo( f32 delta_time )
 {
-	if ( !frames[ frame_index ].cmd_recorded )
+	if ( is_key_pressed( FT_KEY_LEFT_ALT ) )
 	{
-		wait_for_fences( device, 1, &frames[ frame_index ].render_fence );
-		reset_fences( device, 1, &frames[ frame_index ].render_fence );
-		frames[ frame_index ].cmd_recorded = 1;
+		camera_controller_update( &camera_controller, delta_time );
+	}
+	else
+	{
+		camera_controller_reset( &camera_controller );
 	}
 
-	acquire_next_image( device,
-	                    swapchain,
-	                    frames[ frame_index ].present_semaphore,
-	                    NULL,
-	                    &image_index );
+	mat4x4_dup( shader_data.view, camera.view );
+	mat4x4_dup( shader_data.projection, camera.projection );
+
+	map_memory( device, ubo_buffer );
+	memcpy( ubo_buffer->mapped_memory,
+	        &shader_data,
+	        sizeof( struct ShaderData ) );
+	unmap_memory( device, ubo_buffer );
 }
 
-void
-end_frame()
+static void
+draw_scene( struct CommandBuffer* cmd )
 {
-	struct QueueSubmitInfo submit_info = {};
-	submit_info.wait_semaphore_count   = 1;
-	submit_info.wait_semaphores      = &frames[ frame_index ].present_semaphore;
-	submit_info.command_buffer_count = 1;
-	submit_info.command_buffers      = &frames[ frame_index ].cmd;
-	submit_info.signal_semaphore_count = 1;
-	submit_info.signal_semaphores = &frames[ frame_index ].render_semaphore;
-	submit_info.signal_fence      = frames[ frame_index ].render_fence;
+	cmd_set_scissor( cmd, 0, 0, swapchain->width, swapchain->height );
+	cmd_set_viewport( cmd,
+	                  0,
+	                  0,
+	                  ( f32 ) swapchain->width,
+	                  ( f32 ) swapchain->height,
+	                  0,
+	                  1 );
+	cmd_bind_descriptor_set( cmd, 0, set, pipeline );
+	cmd_bind_pipeline( cmd, pipeline );
+	cmd_bind_vertex_buffer( cmd, vertex_buffer, 0 );
+	for ( u32 i = 0; i < geometry_count; ++i )
+	{
+		mat4x4* t = transforms_buffer->mapped_memory;
+		mat4x4_dup( t[ i ], geometries[ i ].model );
 
-	queue_submit( graphics_queue, &submit_info );
+		cmd_push_constants( cmd, pipeline, 0, sizeof( u32 ), &i );
 
-	struct QueuePresentInfo queue_present_info = {};
-	queue_present_info.wait_semaphore_count    = 1;
-	queue_present_info.wait_semaphores =
-	    &frames[ frame_index ].render_semaphore;
-	queue_present_info.swapchain   = swapchain;
-	queue_present_info.image_index = image_index;
+		if ( geometries[ i ].is_32 )
+		{
+			cmd_bind_index_buffer_u32( cmd, index_buffer_32, 0 );
 
-	queue_present( graphics_queue, &queue_present_info );
+			cmd_draw_indexed( cmd,
+			                  geometries[ i ].index_count,
+			                  1,
+			                  geometries[ i ].first_index,
+			                  geometries[ i ].first_vertex,
+			                  0 );
+		}
+		else
+		{
+			cmd_bind_index_buffer_u16( cmd, index_buffer_16, 0 );
 
-	frames[ frame_index ].cmd_recorded = 0;
-	frame_index                        = ( frame_index + 1 ) % FRAME_COUNT;
+			cmd_draw_indexed( cmd,
+			                  geometries[ i ].index_count,
+			                  1,
+			                  geometries[ i ].first_index,
+			                  geometries[ i ].first_vertex,
+			                  0 );
+		}
+	}
 }

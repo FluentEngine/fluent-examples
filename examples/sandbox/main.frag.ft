@@ -1,14 +1,15 @@
 #include "fluent.hlsl"
 
-sampler(u_sampler, 1);
-texture2D(float4, u_texture, 2);
+sampler(u_sampler, 2);
+texture2D(float4, u_texture, 3);
 
-struct Input
+struct VertexOutput
 {
-    float3 color : TEXCOORD0;
+    float4 position : SV_Position;
+    float3 normal : NORMAL0;
 };
 
-float4 main(Input stage_input)
+float4 main(VertexOutput stage_input)
 {
-    return float4(stage_input.color, 1.0);
+    return float4(stage_input.normal, 1.0);
 }
