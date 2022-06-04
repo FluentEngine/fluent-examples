@@ -4,6 +4,8 @@ workspace "fluent-examples"
     location "build"
     configurations { "release", "debug" }
 
+    architecture "x64"
+
     root_directory = path.getabsolute(".")
 
     -- TODO: make option

@@ -66,7 +66,7 @@ static void
 draw_scene( struct CommandBuffer* );
 
 static void
-on_init()
+on_init(void)
 {
 	init_renderer();
 
@@ -74,7 +74,7 @@ on_init()
 	vec3 direction = { 0.0f, 0.0f, -1.0f };
 	vec3 up        = { 0.0f, 1.0f, 0.0f };
 
-	struct CameraInfo camera_info = {};
+	struct CameraInfo camera_info = { 0 };
 	camera_info.fov               = radians( 45.0f );
 	camera_info.aspect            = window_get_aspect( get_app_window() );
 	camera_info.near              = 0.1f;
@@ -90,7 +90,7 @@ on_init()
 
 	mat4x4_dup( shader_data.projection, camera.projection );
 
-	struct ShaderInfo shader_info      = {};
+	struct ShaderInfo shader_info      = { 0 };
 	shader_info.vertex.bytecode_size   = sizeof( shader_main_vert );
 	shader_info.vertex.bytecode        = shader_main_vert;
 	shader_info.fragment.bytecode_size = sizeof( shader_main_frag );
@@ -101,7 +101,7 @@ on_init()
 
 	create_descriptor_set_layout( device, shader, &dsl );
 
-	struct PipelineInfo  pipeline_info = {};
+	struct PipelineInfo  pipeline_info = { 0 };
 	struct VertexLayout* l             = &pipeline_info.vertex_layout;
 	l->binding_info_count              = 1;
 	l->binding_infos[ 0 ].binding      = 0;
@@ -171,7 +171,7 @@ on_update( f32 delta_time )
 	barriers[ 1 ].old_state           = FT_RESOURCE_STATE_UNDEFINED;
 	barriers[ 1 ].new_state           = FT_RESOURCE_STATE_DEPTH_STENCIL_WRITE;
 
-	struct RenderPassBeginInfo rp_info     = {};
+	struct RenderPassBeginInfo rp_info     = { 0 };
 	rp_info.device                         = device;
 	rp_info.width                          = swapchain->width;
 	rp_info.height                         = swapchain->height;
@@ -216,7 +216,7 @@ on_resize( u32 width, u32 height )
 }
 
 static void
-on_shutdown()
+on_shutdown(void)
 {
 	queue_wait_idle( graphics_queue );
 	unmap_memory( device, transforms_buffer );
@@ -235,7 +235,7 @@ on_shutdown()
 int
 main( int argc, char** argv )
 {
-	struct WindowInfo window_info = {};
+	struct WindowInfo window_info = { 0 };
 	window_info.title             = "fluent-sandbox";
 	window_info.x                 = 100;
 	window_info.y                 = 100;
@@ -246,7 +246,7 @@ main( int argc, char** argv )
 	window_info.fullscreen        = 0;
 	window_info.grab_mouse        = 0;
 
-	struct ApplicationConfig config = {};
+	struct ApplicationConfig config = { 0 };
 	config.argc                     = argc;
 	config.argv                     = argv;
 	config.window_info              = window_info;

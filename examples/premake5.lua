@@ -29,9 +29,16 @@ project(name)
         "tiny_image_format",
         "vk_mem_alloc",
         "volk",
-        "m",
         "sdl2",
     }
+
+    filter { "system:linux" }
+        links {
+            "m"
+        }
+    filter { "system:windows" }
+        entrypoint "mainCRTStartup"
+    filter { }
 end
 
 commons.compile_shaders = function(ex)
