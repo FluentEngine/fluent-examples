@@ -3,7 +3,7 @@
 #include <fluent/os.h>
 #include <fluent/renderer.h>
 
-#define FRAME_COUNT   2
+#define FRAME_COUNT 2
 
 struct FrameData
 {
@@ -47,7 +47,6 @@ create_depth_image()
 
 	create_image( device, &info, &depth_image );
 }
-
 
 void
 init_renderer()

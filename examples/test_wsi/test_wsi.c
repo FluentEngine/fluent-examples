@@ -255,8 +255,8 @@ on_shutdown()
 static void
 create_vulkan_surface_glfw( void* w, void* i, void** s )
 {
-	GLFWwindow* glfw_window = ( GLFWwindow* ) w;
-	VkInstance  instance    = ( VkInstance ) i;
+	GLFWwindow*  glfw_window = ( GLFWwindow* ) w;
+	VkInstance   instance    = ( VkInstance ) i;
 	VkSurfaceKHR surface;
 	glfwCreateWindowSurface( instance, glfw_window, NULL, &surface );
 	*s = surface;
@@ -266,27 +266,29 @@ int
 main( int argc, char** argv )
 {
 	log_init( FT_TRACE );
-	
+
 	glfwInit();
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint( GLFW_CLIENT_API, GLFW_NO_API );
 	glfwWindowHint( GLFW_RESIZABLE, GLFW_FALSE );
-	window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "test_wsi", NULL, NULL);
-	glfw_wsi.vulkan_instance_extensions = glfwGetRequiredInstanceExtensions(&glfw_wsi.vulkan_instance_extension_count);
-	glfw_wsi.window = window;
+	window =
+	    glfwCreateWindow( WINDOW_WIDTH, WINDOW_HEIGHT, "test_wsi", NULL, NULL );
+	glfw_wsi.vulkan_instance_extensions = glfwGetRequiredInstanceExtensions(
+	    &glfw_wsi.vulkan_instance_extension_count );
+	glfw_wsi.window                = window;
 	glfw_wsi.create_vulkan_surface = create_vulkan_surface_glfw;
-	
+
 	on_init();
-	
-	while (!glfwWindowShouldClose(window)) 
+
+	while ( !glfwWindowShouldClose( window ) )
 	{
 		on_update( 0.0f );
 		glfwPollEvents();
 	}
-	
+
 	on_shutdown();
-	
+
 	glfwTerminate();
-	
+
 	log_shutdown();
 
 	return EXIT_SUCCESS;

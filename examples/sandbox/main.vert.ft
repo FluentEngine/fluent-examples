@@ -27,6 +27,7 @@ struct Output
 {
     float4 position : SV_Position;
     float3 normal : NORMAL0;
+    float3 frag_pos : TEXCOORD0;
 };
 
 Output main(Input stage_input)
@@ -34,5 +35,6 @@ Output main(Input stage_input)
     Output stage_output;
 	stage_output.position = mul(projection, mul(view, mul(u_transforms[ instance_id ], float4(stage_input.position, 1.0))));
 	stage_output.normal = mul(float3x3(u_transforms[ instance_id ]), stage_input.normal);
+	stage_output.frag_pos = mul(u_transforms[ instance_id ], float4(stage_input.position, 1.0)).xyz;
     return stage_output;
 }

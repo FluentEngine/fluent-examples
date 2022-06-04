@@ -7,9 +7,32 @@ struct VertexOutput
 {
     float4 position : SV_Position;
     float3 normal : NORMAL0;
+    float3 frag_pos : TEXCOORD0;
 };
 
 float4 main(VertexOutput stage_input)
 {
-    return float4(stage_input.normal, 1.0);
+	float3 view_pos = float3(0.0, 1.0, 3.0);
+	float3 light_color = float3(1.0, 1.0, 1.0);
+	float3 light_pos = float3(0.0, 1.0, 0.0);
+	// ambient
+    float ambient_strength = 0.1;
+    float3 ambient = ambient_strength * light_color;
+  	
+    // diffuse 
+    float3 N = normalize(stage_input.normal);
+    float3 light_dir = normalize(light_pos - stage_input.frag_pos);
+    float diff = max(dot(N, light_dir), 0.0);
+    float3 diffuse = diff * light_color;
+    
+    // specular
+    float specular_strength = 0.5;
+    float3 view_dir = normalize(view_pos - stage_input.frag_pos);
+    float3 reflect_dir = reflect(-light_dir, N);  
+    float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 32);
+    float3 specular = specular_strength * spec * light_color;  
+        
+    float3 result = (ambient + diffuse + specular) * float3(1.0, 1.0, 1.0);
+    
+    return float4(result, 1.0);
 }

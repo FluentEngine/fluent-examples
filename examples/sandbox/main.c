@@ -66,7 +66,7 @@ static void
 draw_scene( struct CommandBuffer* );
 
 static void
-on_init(void)
+on_init( void )
 {
 	init_renderer();
 
@@ -216,7 +216,7 @@ on_resize( u32 width, u32 height )
 }
 
 static void
-on_shutdown(void)
+on_shutdown( void )
 {
 	queue_wait_idle( graphics_queue );
 	unmap_memory( device, transforms_buffer );
@@ -322,7 +322,7 @@ load_scene()
 	};
 
 	create_sampler( device, &sampler_info, &sampler );
-	
+
 	struct BufferInfo buffer_info = {
 		.descriptor_type = FT_DESCRIPTOR_TYPE_VERTEX_BUFFER,
 		.memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU,

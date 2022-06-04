@@ -30,6 +30,7 @@ project(name)
         "vk_mem_alloc",
         "volk",
         "sdl2",
+        "stb"
     }
 
     filter { "system:linux" }
