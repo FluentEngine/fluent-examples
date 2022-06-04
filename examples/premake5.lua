@@ -7,10 +7,12 @@ project(name)
 	
 	filter { "configurations:debug" }
         symbols "On"
-        defines { "FLUENT_DEBUG" }
+        optimize "Off"
+        defines { "DEBUG", "FLUENT_DEBUG" }
     filter { "configurations:release" }
 		symbols "Off"
 		optimize "Speed"
+        defines { "NDEBUG" }
 	filter {}
 	
 	includedirs {
@@ -22,16 +24,10 @@ project(name)
 	links { 
         "ft_renderer", 
         "ft_os", 
-        "ft_log", 
-        "hashmap_c",
-        "cgltf",
-        "spirv_reflect",
-        "tiny_image_format",
-        "vk_mem_alloc",
-        "volk",
-        "sdl2",
-        "stb"
+        "ft_log"
     }
+
+    fluent_engine.link()
 
     filter { "system:linux" }
         links {
