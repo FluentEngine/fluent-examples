@@ -2,7 +2,6 @@ build/
 deps/
 **/.vscode/
 
-*.bin
 *.user
 
 # MacOS generated files #

@@ -39,9 +39,9 @@ create_depth_image()
 		.height          = swapchain->height,
 		.depth           = 1,
 		.format          = FT_FORMAT_D32_SFLOAT,
+		.sample_count    = 1,
 		.layer_count     = 1,
 		.mip_levels      = 1,
-		.sample_count    = 1,
 		.descriptor_type = FT_DESCRIPTOR_TYPE_DEPTH_STENCIL_ATTACHMENT,
 	};
 

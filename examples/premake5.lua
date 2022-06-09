@@ -4,7 +4,7 @@ commons.example = function(name)
 project(name)
     kind "WindowedApp"
     language "C++"
-	
+
 	filter { "configurations:debug" }
         symbols "On"
         optimize "Off"
@@ -15,10 +15,9 @@ project(name)
         defines { "NDEBUG" }
 	filter {}
 	
-	includedirs {
+	sysincludedirs {
         "../deps/fluent/sources",
         "../deps/fluent/sources/third_party/",
-        "../deps/SDL/include"
     }
     
 	links { 
@@ -71,16 +70,16 @@ commons.example("render_graph")
 		"render_graph/main.c",
 	}
 	
-commons.example("test_wsi")
-    files {
-        "test_wsi/test_wsi.c",
+-- commons.example("test_wsi")
+--     files {
+--         "test_wsi/test_wsi.c",
 
-        "test_wsi/main.vert.ft",
-        "test_wsi/main.frag.ft"
-    }
+--         "test_wsi/main.vert.ft",
+--         "test_wsi/main.frag.ft"
+--     }
 
-	links { 
-        "glfw"
-    }
+-- 	links { 
+--         "glfw"
+--     }
 	
-	commons.compile_shaders("test_wsi")
+-- 	commons.compile_shaders("test_wsi")

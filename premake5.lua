@@ -3,9 +3,7 @@ workspace "fluent-examples"
     objdir "build/%{prj.name}"
     location "build"
     configurations { "release", "debug" }
-
-    architecture "x64"
-
+	
     root_directory = path.getabsolute(".")
 
     -- TODO: make option
@@ -21,6 +19,6 @@ workspace "fluent-examples"
         fluent_engine_repo = git_url_prefix .. "FluentEngine/fluent.git " .. root_directory .. "/deps/fluent"
         os.execute("git clone " .. fluent_engine_repo )
     end
-
+	
     include "deps/fluent/fluent-engine.lua"
     include "examples/premake5.lua"
