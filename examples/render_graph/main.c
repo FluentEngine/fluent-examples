@@ -25,6 +25,8 @@ static struct FrameData        frames[ FRAME_COUNT ];
 static u32                     frame_index = 0;
 static u32                     image_index = 0;
 
+struct RenderGraph* graph = NULL;
+
 void
 init_renderer( void );
 
@@ -40,6 +42,12 @@ static void
 on_init()
 {
 	init_renderer();
+
+	rg_create( device, &graph );
+	struct RenderGraphPass* pass = rg_add_pass( graph, "main" );
+	struct ImageInfo        image_info = { 0 };
+	rg_add_color_output( pass, &image_info, "back" );
+	rg_build( graph );
 }
 
 static void
@@ -51,6 +59,9 @@ on_update( f32 delta_time )
 
 	struct CommandBuffer* cmd = frames[ frame_index ].cmd;
 	begin_command_buffer( cmd );
+
+	rg_setup_attachments( graph, swapchain->images[ image_index ] );
+	rg_execute( graph, cmd );
 
 	end_command_buffer( cmd );
 
@@ -68,6 +79,7 @@ static void
 on_shutdown()
 {
 	queue_wait_idle( graphics_queue );
+	rg_destroy( graph );
 	shutdown_renderer();
 }
 
@@ -139,7 +151,7 @@ init_renderer()
 	window_get_size( get_app_window(),
 	                 &swapchain_info.width,
 	                 &swapchain_info.height );
-	swapchain_info.format          = FT_FORMAT_B8G8R8A8_SRGB;
+	swapchain_info.format          = FT_FORMAT_R8G8B8A8_SRGB;
 	swapchain_info.min_image_count = FRAME_COUNT;
 	swapchain_info.vsync           = 1;
 	swapchain_info.queue           = graphics_queue;
