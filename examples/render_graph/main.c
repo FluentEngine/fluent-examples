@@ -16,7 +16,7 @@ struct FrameData
 	b32                   cmd_recorded;
 };
 
-static enum RendererAPI        renderer_api   = FT_RENDERER_API_VULKAN;
+static enum RendererAPI        renderer_api   = FT_RENDERER_API_METAL;
 static struct RendererBackend* backend        = NULL;
 static struct Device*          device         = NULL;
 static struct Queue*           graphics_queue = NULL;
@@ -84,6 +84,7 @@ main( int argc, char** argv )
 	window_info.centered          = 1;
 	window_info.fullscreen        = 0;
 	window_info.grab_mouse        = 0;
+	window_info.renderer_api      = renderer_api;
 
 	struct ApplicationConfig config = {};
 	config.argc                     = argc;
