@@ -16,7 +16,7 @@ struct FrameData
 	b32                   cmd_recorded;
 };
 
-static enum RendererAPI        renderer_api   = FT_RENDERER_API_METAL;
+static enum RendererAPI        renderer_api   = FT_RENDERER_API_VULKAN;
 static struct RendererBackend* backend        = NULL;
 static struct Device*          device         = NULL;
 static struct Queue*           graphics_queue = NULL;
