@@ -15,12 +15,18 @@ project(name)
         defines { "NDEBUG" }
 	filter {}
 	
-	sysincludedirs {
+	includedirs 
+	{
         "../deps/fluent/sources",
+	}
+	
+	sysincludedirs 
+	{
         "../deps/fluent/sources/third_party/",
     }
     
-	links { 
+	links 
+	{ 
         "ft_renderer", 
         "ft_os", 
         "ft_log"
@@ -29,7 +35,8 @@ project(name)
     fluent_engine.link()
 
     filter { "system:linux" }
-        links {
+        links 
+        {
             "m"
         }
     filter { "system:windows" }
@@ -41,22 +48,26 @@ commons.compile_shaders = function(ex)
     filter 'files:**.ft'
         buildmessage 'Compiling shader %{file.relpath}'
 
-        prebuildcommands {
+        prebuildcommands 
+        {
             'python3 ../tools/compile_shaders.py --input ' .. path.getabsolute("%{file.relpath}") .. ' --output ' .. path.getabsolute(ex .."/%{file.basename}.h") .. ' --bytecodes spirv'
         }
 
-        buildcommands {
+        buildcommands 
+        {
             'python3 ../tools/compile_shaders.py --input ' .. path.getabsolute("%{file.relpath}") .. ' --output ' .. path.getabsolute(ex .. "/%{file.basename}.h") .. ' --bytecodes spirv'
         }
 
-        buildoutputs { 
+        buildoutputs 
+        { 
 			path.getabsolute(ex .."/%{file.basename}.h")
 		}
 	filter {}
 end
 
 commons.example("sandbox")
-    files {
+    files 
+    {
         "sandbox/main.c",
 
         "sandbox/main.vert.ft",
@@ -66,19 +77,27 @@ commons.example("sandbox")
 	commons.compile_shaders("sandbox")
 
 commons.example("render_graph")
-	files {
+	files 
+	{
 		"render_graph/main.c",
 	}
 	
 -- commons.example("test_wsi")
---     files {
+--     files 
+--     {
 --         "test_wsi/test_wsi.c",
 
---         "test_wsi/main.vert.ft",
---         "test_wsi/main.frag.ft"
---     }
-
--- 	links { 
+-- 		"test_wsi/main.vert.ft",
+-- 		"test_wsi/main.frag.ft"
+-- 	}
+	
+-- 	sysincludedirs
+-- 	{	
+-- 		vulkan_include_directory
+-- 	}
+	
+-- 	links 
+-- 	{ 
 --         "glfw"
 --     }
 	

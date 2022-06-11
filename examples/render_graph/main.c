@@ -27,16 +27,25 @@ static u32                     image_index = 0;
 
 struct RenderGraph* graph = NULL;
 
-void
+static void
 init_renderer( void );
-
-void
+static void
 shutdown_renderer( void );
 
-void
+static void
 begin_frame( void );
-void
+static void
 end_frame( void );
+
+static b32
+get_clear_color( u32 idx, ColorClearValue* clear_values )
+{
+	clear_values[ idx ][ 0 ] = 0.4f;
+	clear_values[ idx ][ 1 ] = 0.3f;
+	clear_values[ idx ][ 2 ] = 0.4f;
+	clear_values[ idx ][ 3 ] = 1.0f;
+	return 1;
+}
 
 static void
 on_init()
@@ -46,7 +55,16 @@ on_init()
 	rg_create( device, &graph );
 	struct RenderGraphPass* pass       = rg_add_pass( graph, "main" );
 	struct ImageInfo        image_info = { 0 };
+	image_info.width                   = swapchain->width;
+	image_info.height                  = swapchain->height;
+	image_info.depth                   = 1;
+	image_info.sample_count            = 1;
+	image_info.mip_levels              = 1;
+	image_info.layer_count             = 1;
+	image_info.format                  = swapchain->format;
 	rg_add_color_output( pass, &image_info, "back" );
+	pass->get_color_clear_value_callback = get_clear_color;
+	rg_set_backbuffer_source( graph, "back" );
 	rg_build( graph );
 }
 
@@ -115,7 +133,7 @@ main( int argc, char** argv )
 	return EXIT_SUCCESS;
 }
 
-void
+static void
 init_renderer()
 {
 	struct RendererBackendInfo backend_info = { 0 };
@@ -151,7 +169,7 @@ init_renderer()
 	window_get_framebuffer_size( get_app_window(),
 	                             &swapchain_info.width,
 	                             &swapchain_info.height );
-	swapchain_info.format          = FT_FORMAT_R8G8B8A8_SRGB;
+	swapchain_info.format          = FT_FORMAT_B8G8R8A8_SRGB;
 	swapchain_info.min_image_count = FRAME_COUNT;
 	swapchain_info.vsync           = 1;
 	swapchain_info.queue           = graphics_queue;
@@ -159,7 +177,7 @@ init_renderer()
 	create_swapchain( device, &swapchain_info, &swapchain );
 }
 
-void
+static void
 shutdown_renderer()
 {
 	queue_wait_idle( graphics_queue );
@@ -183,7 +201,7 @@ shutdown_renderer()
 	destroy_renderer_backend( backend );
 }
 
-void
+static void
 begin_frame()
 {
 	if ( !frames[ frame_index ].cmd_recorded )
@@ -200,7 +218,7 @@ begin_frame()
 	                    &image_index );
 }
 
-void
+static void
 end_frame()
 {
 	struct QueueSubmitInfo submit_info = { 0 };

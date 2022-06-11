@@ -1,7 +1,20 @@
 workspace "fluent-examples"
-    targetdir "build/%{prj.name}"
-    objdir "build/%{prj.name}"
-    location "build"
+
+	newoption
+	{
+		trigger = "build_directory",
+		description = "build directory"
+	}
+	
+	build_directory = "build/"
+	
+	if _OPTIONS["build_directory"] ~= nil then
+		build_directory = _OPTIONS["build_directory"] .. "/"
+	end
+
+    targetdir (build_directory .. "/%{prj.name}")
+    objdir (build_directory .."/%{prj.name}")
+    location (build_directory)
     configurations { "release", "debug" }
 	
     root_directory = path.getabsolute(".")
@@ -19,6 +32,6 @@ workspace "fluent-examples"
         fluent_engine_repo = git_url_prefix .. "FluentEngine/fluent.git " .. root_directory .. "/deps/fluent"
         os.execute("git clone " .. fluent_engine_repo )
     end
-	
-    include "deps/fluent/fluent-engine.lua"
-    include "examples/premake5.lua"
+
+    include ("deps/fluent/fluent-engine.lua")
+    include ("examples/premake5.lua")
