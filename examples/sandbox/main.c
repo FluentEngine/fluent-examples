@@ -154,9 +154,9 @@ on_init( void )
 	destroy_shader( device, shader );
 
 	struct BufferInfo buffer_info = {
-		.descriptor_type = FT_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		.memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU,
-		.size            = sizeof( struct ShaderData ),
+	    .descriptor_type = FT_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+	    .memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU,
+	    .size            = sizeof( struct ShaderData ),
 	};
 
 	create_buffer( device, &buffer_info, &ubo_buffer );
@@ -184,21 +184,22 @@ on_update( f32 delta_time )
 	barriers[ 1 ].old_state           = FT_RESOURCE_STATE_UNDEFINED;
 	barriers[ 1 ].new_state           = FT_RESOURCE_STATE_DEPTH_STENCIL_WRITE;
 
-	struct RenderPassBeginInfo rp_info     = { 0 };
-	rp_info.width                          = swapchain->width;
-	rp_info.height                         = swapchain->height;
-	rp_info.color_attachment_count         = 1;
-
-	rp_info.color_attachments[ 0 ] = ( struct AttachmentInfo ) {
-		.image             = swapchain->images[ image_index ],
-		.load_op           = FT_ATTACHMENT_LOAD_OP_CLEAR,
-		.clear_value.color = { 0.38f, 0.30f, 0.35f, 1.0f },
-	};
-
-	rp_info.depth_attachment = ( struct AttachmentInfo ) {
-		.image                     = depth_image,
-		.load_op                   = FT_ATTACHMENT_LOAD_OP_CLEAR,
-		.clear_value.depth_stencil = { 1.0f, 0 },
+	struct RenderPassBeginInfo rp_info = {
+	    .width                  = swapchain->width,
+	    .height                 = swapchain->height,
+	    .color_attachment_count = 1,
+	    .color_attachments[ 0 ] =
+	        {
+	            .image             = swapchain->images[ image_index ],
+	            .load_op           = FT_ATTACHMENT_LOAD_OP_CLEAR,
+	            .clear_value.color = { 0.38f, 0.30f, 0.35f, 1.0f },
+	        },
+	    .depth_attachment =
+	        {
+	            .image                     = depth_image,
+	            .load_op                   = FT_ATTACHMENT_LOAD_OP_CLEAR,
+	            .clear_value.depth_stencil = { 1.0f, 0 },
+	        },
 	};
 
 	cmd_barrier( cmd, 0, NULL, 0, NULL, 2, barriers );
@@ -242,9 +243,9 @@ on_update( f32 delta_time )
 	cmd_end_render_pass( cmd );
 
 	struct ImageBarrier barrier = {
-		.image     = swapchain->images[ image_index ],
-		.old_state = FT_RESOURCE_STATE_COLOR_ATTACHMENT,
-		.new_state = FT_RESOURCE_STATE_PRESENT,
+	    .image     = swapchain->images[ image_index ],
+	    .old_state = FT_RESOURCE_STATE_COLOR_ATTACHMENT,
+	    .new_state = FT_RESOURCE_STATE_PRESENT,
 	};
 
 	cmd_barrier( cmd, 0, NULL, 0, NULL, 1, &barrier );
@@ -314,22 +315,22 @@ static void
 write_descriptors()
 {
 	struct DescriptorSetInfo set_info = {
-		.descriptor_set_layout = dsl,
-		.set                   = 0,
+	    .descriptor_set_layout = dsl,
+	    .set                   = 0,
 	};
 
 	create_descriptor_set( device, &set_info, &set );
 
 	struct BufferDescriptor buffer_descriptor = {
-		.buffer = ubo_buffer,
-		.offset = 0,
-		.range  = sizeof( struct ShaderData ),
+	    .buffer = ubo_buffer,
+	    .offset = 0,
+	    .range  = sizeof( struct ShaderData ),
 	};
 
 	struct BufferDescriptor tbuffer_descriptor = {
-		.buffer = transforms_buffer,
-		.offset = 0,
-		.range  = MAX_GEOMETRY_COUNT * sizeof( mat4x4 ),
+	    .buffer = transforms_buffer,
+	    .offset = 0,
+	    .range  = MAX_GEOMETRY_COUNT * sizeof( mat4x4 ),
 	};
 
 	struct DescriptorWrite descriptor_writes[ 2 ];
@@ -353,44 +354,44 @@ static void
 load_scene()
 {
 	struct SamplerInfo sampler_info = {
-		.mag_filter        = FT_FILTER_LINEAR,
-		.min_filter        = FT_FILTER_LINEAR,
-		.mipmap_mode       = FT_SAMPLER_MIPMAP_MODE_NEAREST,
-		.address_mode_u    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
-		.address_mode_v    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
-		.address_mode_w    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
-		.mip_lod_bias      = 0,
-		.anisotropy_enable = 0,
-		.max_anisotropy    = 0,
-		.compare_enable    = 0,
-		.compare_op        = FT_COMPARE_OP_ALWAYS,
-		.min_lod           = 0,
-		.max_lod           = 0,
+	    .mag_filter        = FT_FILTER_LINEAR,
+	    .min_filter        = FT_FILTER_LINEAR,
+	    .mipmap_mode       = FT_SAMPLER_MIPMAP_MODE_NEAREST,
+	    .address_mode_u    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
+	    .address_mode_v    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
+	    .address_mode_w    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
+	    .mip_lod_bias      = 0,
+	    .anisotropy_enable = 0,
+	    .max_anisotropy    = 0,
+	    .compare_enable    = 0,
+	    .compare_op        = FT_COMPARE_OP_ALWAYS,
+	    .min_lod           = 0,
+	    .max_lod           = 0,
 	};
 
 	create_sampler( device, &sampler_info, &sampler );
 
 	struct BufferInfo buffer_info = {
-		.descriptor_type = FT_DESCRIPTOR_TYPE_VERTEX_BUFFER,
-		.memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU,
-		.size            = VERTEX_BUFFER_SIZE,
+	    .descriptor_type = FT_DESCRIPTOR_TYPE_VERTEX_BUFFER,
+	    .memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU,
+	    .size            = VERTEX_BUFFER_SIZE,
 	};
 
 	create_buffer( device, &buffer_info, &vertex_buffer );
 
 	buffer_info = ( struct BufferInfo ) {
-		.descriptor_type = FT_DESCRIPTOR_TYPE_INDEX_BUFFER,
-		.memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU,
-		.size            = INDEX_BUFFER_SIZE,
+	    .descriptor_type = FT_DESCRIPTOR_TYPE_INDEX_BUFFER,
+	    .memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU,
+	    .size            = INDEX_BUFFER_SIZE,
 	};
 
 	create_buffer( device, &buffer_info, &index_buffer_16 );
 	create_buffer( device, &buffer_info, &index_buffer_32 );
 
 	buffer_info = ( struct BufferInfo ) {
-		.descriptor_type = FT_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU,
-		.size            = sizeof( mat4x4 ) * MAX_GEOMETRY_COUNT,
+	    .descriptor_type = FT_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+	    .memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU,
+	    .size            = sizeof( mat4x4 ) * MAX_GEOMETRY_COUNT,
 	};
 
 	create_buffer( device, &buffer_info, &transforms_buffer );

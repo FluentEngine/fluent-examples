@@ -128,27 +128,27 @@ int
 main( int argc, char** argv )
 {
 	struct WindowInfo window_info = {
-		.title        = "fluent-sandbox",
-		.x            = 100,
-		.y            = 100,
-		.width        = WINDOW_WIDTH,
-		.height       = WINDOW_HEIGHT,
-		.resizable    = 0,
-		.centered     = 1,
-		.fullscreen   = 0,
-		.grab_mouse   = 0,
-		.renderer_api = renderer_api,
+	    .title        = "fluent-sandbox",
+	    .x            = 100,
+	    .y            = 100,
+	    .width        = WINDOW_WIDTH,
+	    .height       = WINDOW_HEIGHT,
+	    .resizable    = 0,
+	    .centered     = 1,
+	    .fullscreen   = 0,
+	    .grab_mouse   = 0,
+	    .renderer_api = renderer_api,
 	};
 
 	struct ApplicationConfig config = {
-		.argc        = argc,
-		.argv        = argv,
-		.window_info = window_info,
-		.log_level   = FT_TRACE,
-		.on_init     = on_init,
-		.on_update   = on_update,
-		.on_resize   = on_resize,
-		.on_shutdown = on_shutdown,
+	    .argc        = argc,
+	    .argv        = argv,
+	    .window_info = window_info,
+	    .log_level   = FT_TRACE,
+	    .on_init     = on_init,
+	    .on_update   = on_update,
+	    .on_resize   = on_resize,
+	    .on_shutdown = on_shutdown,
 	};
 
 	app_init( &config );
@@ -162,18 +162,18 @@ static void
 init_renderer()
 {
 	struct RendererBackendInfo backend_info = {
-		backend_info.api      = renderer_api,
-		backend_info.wsi_info = get_ft_wsi_info(),
+	    backend_info.api      = renderer_api,
+	    backend_info.wsi_info = get_ft_wsi_info(),
 	};
 	create_renderer_backend( &backend_info, &backend );
 
 	struct DeviceInfo device_info = {
-		device_info.backend = backend,
+	    device_info.backend = backend,
 	};
 	create_device( backend, &device_info, &device );
 
 	struct QueueInfo queue_info = {
-		queue_info.queue_type = FT_QUEUE_TYPE_GRAPHICS,
+	    queue_info.queue_type = FT_QUEUE_TYPE_GRAPHICS,
 	};
 	create_queue( device, &queue_info, &graphics_queue );
 
@@ -185,7 +185,7 @@ init_renderer()
 		create_fence( device, &frames[ i ].render_fence );
 
 		struct CommandPoolInfo pool_info = {
-			.queue = graphics_queue,
+		    .queue = graphics_queue,
 		};
 
 		create_command_pool( device, &pool_info, &frames[ i ].cmd_pool );
@@ -196,13 +196,13 @@ init_renderer()
 	}
 
 	struct SwapchainInfo swapchain_info = {
-		.width           = window_get_framebuffer_width( get_app_window() ),
-		.height          = window_get_framebuffer_height( get_app_window() ),
-		.format          = FT_FORMAT_B8G8R8A8_SRGB,
-		.min_image_count = FRAME_COUNT,
-		.vsync           = 1,
-		.queue           = graphics_queue,
-		.wsi_info        = get_ft_wsi_info(),
+	    .width           = window_get_framebuffer_width( get_app_window() ),
+	    .height          = window_get_framebuffer_height( get_app_window() ),
+	    .format          = FT_FORMAT_B8G8R8A8_SRGB,
+	    .min_image_count = FRAME_COUNT,
+	    .vsync           = 1,
+	    .queue           = graphics_queue,
+	    .wsi_info        = get_ft_wsi_info(),
 	};
 	create_swapchain( device, &swapchain_info, &swapchain );
 }
@@ -252,22 +252,22 @@ static void
 end_frame()
 {
 	struct QueueSubmitInfo submit_info = {
-		.wait_semaphore_count   = 1,
-		.wait_semaphores        = &frames[ frame_index ].present_semaphore,
-		.command_buffer_count   = 1,
-		.command_buffers        = &frames[ frame_index ].cmd,
-		.signal_semaphore_count = 1,
-		.signal_semaphores      = &frames[ frame_index ].render_semaphore,
-		.signal_fence           = frames[ frame_index ].render_fence,
+	    .wait_semaphore_count   = 1,
+	    .wait_semaphores        = &frames[ frame_index ].present_semaphore,
+	    .command_buffer_count   = 1,
+	    .command_buffers        = &frames[ frame_index ].cmd,
+	    .signal_semaphore_count = 1,
+	    .signal_semaphores      = &frames[ frame_index ].render_semaphore,
+	    .signal_fence           = frames[ frame_index ].render_fence,
 	};
 
 	queue_submit( graphics_queue, &submit_info );
 
 	struct QueuePresentInfo queue_present_info = {
-		.wait_semaphore_count = 1,
-		.wait_semaphores      = &frames[ frame_index ].render_semaphore,
-		.swapchain            = swapchain,
-		.image_index          = image_index,
+	    .wait_semaphore_count = 1,
+	    .wait_semaphores      = &frames[ frame_index ].render_semaphore,
+	    .swapchain            = swapchain,
+	    .image_index          = image_index,
 	};
 
 	queue_present( graphics_queue, &queue_present_info );
