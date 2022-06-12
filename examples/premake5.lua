@@ -50,12 +50,12 @@ commons.compile_shaders = function(ex)
 
         prebuildcommands 
         {
-            'python3 ../tools/compile_shaders.py --input ' .. path.getabsolute("%{file.relpath}") .. ' --output ' .. path.getabsolute(ex .."/%{file.basename}.h") .. ' --bytecodes spirv'
+            'python3 ' .. path.getabsolute('../tools/compile_shaders.py') .. ' --input ' .. '%{file.relpath} --output ' .. path.getabsolute(ex ..'/%{file.basename}.h') .. ' --bytecodes spirv'
         }
 
         buildcommands 
         {
-            'python3 ../tools/compile_shaders.py --input ' .. path.getabsolute("%{file.relpath}") .. ' --output ' .. path.getabsolute(ex .. "/%{file.basename}.h") .. ' --bytecodes spirv'
+            'python3 ' .. path.getabsolute('../tools/compile_shaders.py') .. ' --input ' .. '%{file.relpath} --output ' .. path.getabsolute(ex ..'/%{file.basename}.h') .. ' --bytecodes spirv'
         }
 
         buildoutputs 
