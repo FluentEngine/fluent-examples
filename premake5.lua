@@ -17,6 +17,11 @@ workspace "fluent-examples"
     location (build_directory)
     configurations { "release", "debug" }
 	
+    filter { "system:windows" }
+	    architecture "x64"
+		staticruntime "On"
+		filter { }
+
     root_directory = path.getabsolute(".")
 
     -- TODO: make option
