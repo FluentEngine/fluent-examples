@@ -25,8 +25,6 @@ static struct FrameData        frames[ FRAME_COUNT ];
 static u32                     frame_index = 0;
 static u32                     image_index = 0;
 
-struct RenderGraph* graph = NULL;
-
 static void
 init_renderer( void );
 static void
@@ -51,21 +49,6 @@ static void
 on_init()
 {
 	init_renderer();
-
-	rg_create( device, &graph );
-	struct RenderGraphPass* pass       = rg_add_pass( graph, "main" );
-	struct ImageInfo        image_info = { 0 };
-	image_info.width                   = swapchain->width;
-	image_info.height                  = swapchain->height;
-	image_info.depth                   = 1;
-	image_info.sample_count            = 1;
-	image_info.mip_levels              = 1;
-	image_info.layer_count             = 1;
-	image_info.format                  = swapchain->format;
-	rg_add_color_output( pass, &image_info, "back" );
-	pass->get_color_clear_value_callback = get_clear_color;
-	rg_set_backbuffer_source( graph, "back" );
-	rg_build( graph );
 }
 
 static void
@@ -77,9 +60,6 @@ on_update( f32 delta_time )
 
 	struct CommandBuffer* cmd = frames[ frame_index ].cmd;
 	begin_command_buffer( cmd );
-
-	rg_setup_attachments( graph, swapchain->images[ image_index ] );
-	rg_execute( graph, cmd );
 
 	end_command_buffer( cmd );
 
@@ -97,7 +77,6 @@ static void
 on_shutdown()
 {
 	queue_wait_idle( graphics_queue );
-	rg_destroy( graph );
 	shutdown_renderer();
 }
 

@@ -56,6 +56,10 @@ u32                    geometry_count = 0;
 static struct Geometry geometries[ MAX_GEOMETRY_COUNT ];
 static struct Buffer*  transforms_buffer;
 
+static struct nk_context*    ctx;
+static struct nk_color       background;
+static struct nk_font_atlas* atlas;
+
 static void
 write_descriptors();
 static void
@@ -69,6 +73,15 @@ static void
 on_init( void )
 {
 	init_renderer();
+
+	ctx = nk_ft_init( get_ft_wsi_info(),
+	                  device,
+	                  graphics_queue,
+	                  swapchain->format,
+	                  FT_FORMAT_D32_SFLOAT );
+
+	nk_ft_font_stash_begin( &atlas );
+	nk_ft_font_stash_end();
 
 	vec3 position  = { 0.0f, 0.0f, 3.0f };
 	vec3 direction = { 0.0f, 0.0f, -1.0f };
@@ -172,27 +185,62 @@ on_update( f32 delta_time )
 	barriers[ 1 ].new_state           = FT_RESOURCE_STATE_DEPTH_STENCIL_WRITE;
 
 	struct RenderPassBeginInfo rp_info     = { 0 };
-	rp_info.device                         = device;
 	rp_info.width                          = swapchain->width;
 	rp_info.height                         = swapchain->height;
 	rp_info.color_attachment_count         = 1;
-	rp_info.color_attachments[ 0 ]         = swapchain->images[ image_index ];
-	rp_info.color_attachment_load_ops[ 0 ] = FT_ATTACHMENT_LOAD_OP_CLEAR;
-	rp_info.color_image_states[ 0 ]        = FT_RESOURCE_STATE_COLOR_ATTACHMENT;
-	rp_info.depth_stencil                  = depth_image;
-	rp_info.depth_stencil_state   = FT_RESOURCE_STATE_DEPTH_STENCIL_WRITE;
-	rp_info.depth_stencil_load_op = FT_ATTACHMENT_LOAD_OP_CLEAR;
-	rp_info.clear_values[ 0 ].color[ 0 ]            = 0.38f;
-	rp_info.clear_values[ 0 ].color[ 1 ]            = 0.30f;
-	rp_info.clear_values[ 0 ].color[ 2 ]            = 0.35f;
-	rp_info.clear_values[ 0 ].color[ 3 ]            = 1.0f;
-	rp_info.clear_values[ 1 ].depth_stencil.depth   = 1.0f;
-	rp_info.clear_values[ 1 ].depth_stencil.stencil = 0;
+
+	rp_info.color_attachments[ 0 ] = ( struct AttachmentInfo ) {
+		.image             = swapchain->images[ image_index ],
+		.load_op           = FT_ATTACHMENT_LOAD_OP_CLEAR,
+		.state             = FT_RESOURCE_STATE_COLOR_ATTACHMENT,
+		.clear_value.color = { 0.38f, 0.30f, 0.35f, 1.0f },
+	};
+
+	rp_info.depth_attachment = ( struct AttachmentInfo ) {
+		.image                     = depth_image,
+		.load_op                   = FT_ATTACHMENT_LOAD_OP_CLEAR,
+		.state                     = FT_RESOURCE_STATE_DEPTH_STENCIL_WRITE,
+		.clear_value.depth_stencil = { 1.0f, 0 },
+	};
 
 	cmd_barrier( cmd, 0, NULL, 0, NULL, 2, barriers );
 
 	cmd_begin_render_pass( cmd, &rp_info );
 	draw_scene( cmd );
+
+	nk_ft_new_frame();
+
+	struct nk_colorf background = { 0.0f, 0.0f, 0.0f, 1.0f };
+
+	if ( nk_begin( ctx,
+	               "Demo",
+	               nk_rect( 50, 50, 230, 250 ),
+	               NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE |
+	                   NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE ) )
+	{
+		nk_layout_row_static( ctx, 30, 80, 1 );
+		if ( nk_button_label( ctx, "button" ) )
+			fprintf( stdout, "button pressed\n" );
+
+		nk_layout_row_dynamic( ctx, 30, 2 );
+
+		nk_layout_row_dynamic( ctx, 20, 1 );
+		nk_label( ctx, "background:", NK_TEXT_LEFT );
+		nk_layout_row_dynamic( ctx, 25, 1 );
+		if ( nk_combo_begin_color( ctx,
+		                           nk_rgb_cf( background ),
+		                           nk_vec2( nk_widget_width( ctx ), 400 ) ) )
+		{
+			nk_layout_row_dynamic( ctx, 120, 1 );
+			background = nk_color_picker( ctx, background, NK_RGBA );
+			nk_layout_row_dynamic( ctx, 25, 1 );
+			nk_combo_end( ctx );
+		}
+	}
+	nk_end( ctx );
+
+	nk_ft_render( cmd, NK_ANTI_ALIASING_ON );
+
 	cmd_end_render_pass( cmd );
 
 	struct ImageBarrier barrier = {
@@ -229,6 +277,7 @@ on_shutdown( void )
 	destroy_descriptor_set( device, set );
 	destroy_descriptor_set_layout( device, dsl );
 	destroy_pipeline( device, pipeline );
+	nk_ft_shutdown();
 	shutdown_renderer();
 }
 
