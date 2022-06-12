@@ -192,14 +192,12 @@ on_update( f32 delta_time )
 	rp_info.color_attachments[ 0 ] = ( struct AttachmentInfo ) {
 		.image             = swapchain->images[ image_index ],
 		.load_op           = FT_ATTACHMENT_LOAD_OP_CLEAR,
-		.state             = FT_RESOURCE_STATE_COLOR_ATTACHMENT,
 		.clear_value.color = { 0.38f, 0.30f, 0.35f, 1.0f },
 	};
 
 	rp_info.depth_attachment = ( struct AttachmentInfo ) {
 		.image                     = depth_image,
 		.load_op                   = FT_ATTACHMENT_LOAD_OP_CLEAR,
-		.state                     = FT_RESOURCE_STATE_DEPTH_STENCIL_WRITE,
 		.clear_value.depth_stencil = { 1.0f, 0 },
 	};
 
