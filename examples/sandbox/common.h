@@ -35,14 +35,14 @@ create_depth_image()
 	}
 
 	struct ImageInfo info = {
-		.width           = swapchain->width,
-		.height          = swapchain->height,
-		.depth           = 1,
-		.format          = FT_FORMAT_D32_SFLOAT,
-		.sample_count    = 1,
-		.layer_count     = 1,
-		.mip_levels      = 1,
-		.descriptor_type = FT_DESCRIPTOR_TYPE_DEPTH_STENCIL_ATTACHMENT,
+	    .width           = swapchain->width,
+	    .height          = swapchain->height,
+	    .depth           = 1,
+	    .format          = FT_FORMAT_D32_SFLOAT,
+	    .sample_count    = 1,
+	    .layer_count     = 1,
+	    .mip_levels      = 1,
+	    .descriptor_type = FT_DESCRIPTOR_TYPE_DEPTH_STENCIL_ATTACHMENT,
 	};
 
 	create_image( device, &info, &depth_image );

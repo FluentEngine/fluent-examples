@@ -103,11 +103,13 @@ on_init( void )
 
 	mat4x4_dup( shader_data.projection, camera.projection );
 
-	struct ShaderInfo shader_info      = { 0 };
-	shader_info.vertex.bytecode_size   = sizeof( shader_main_vert );
-	shader_info.vertex.bytecode        = shader_main_vert;
-	shader_info.fragment.bytecode_size = sizeof( shader_main_frag );
-	shader_info.fragment.bytecode      = shader_main_frag;
+	struct ShaderInfo shader_info;
+	memset( &shader_info, 0, sizeof( struct ShaderInfo ) );
+	shader_info.vertex.bytecode =
+	    get_shader_main_vert( backend->api, &shader_info.vertex.bytecode_size );
+	shader_info.fragment.bytecode =
+	    get_shader_main_frag( backend->api,
+	                          &shader_info.fragment.bytecode_size );
 
 	struct Shader* shader;
 	create_shader( device, &shader_info, &shader );

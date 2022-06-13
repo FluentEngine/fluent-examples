@@ -51,18 +51,13 @@ main_pass_create( void* user_data )
 {
 	struct MainPassData* data = user_data;
 
-	struct ShaderInfo shader_info = {
-	    .vertex =
-	        {
-	            .bytecode      = shader_main_vert,
-	            .bytecode_size = sizeof( shader_main_vert ),
-	        },
-	    .fragment =
-	        {
-	            .bytecode      = shader_main_frag,
-	            .bytecode_size = sizeof( shader_main_frag ),
-	        },
-	};
+	struct ShaderInfo shader_info;
+	memset( &shader_info, 0, sizeof( struct ShaderInfo ) );
+	shader_info.vertex.bytecode =
+	    get_shader_main_vert( backend->api, &shader_info.vertex.bytecode_size );
+	shader_info.fragment.bytecode =
+	    get_shader_main_frag( backend->api,
+	                          &shader_info.fragment.bytecode_size );
 
 	struct Shader* shader;
 	create_shader( device, &shader_info, &shader );
