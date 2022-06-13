@@ -1,7 +1,5 @@
 #pragma once
 
-#include <fluent/renderer.h>
-
 const uint32_t shader_main_frag_spirv[] = {
     0x07230203, 0x00010000, 0x0008000a, 0x00000033, 0x00000000, 0x00020011,
     0x00000001, 0x0006000b, 0x00000001, 0x4c534c47, 0x6474732e, 0x3035342e,
@@ -288,29 +286,4 @@ const unsigned char shader_main_frag_msl[] = {
     0x00, 0x00, 0x00,
 };
 
-static inline const void*
-get_shader_main_frag( enum RendererAPI api, u32* size )
-{
-	switch ( api )
-	{
-	case FT_RENDERER_API_VULKAN:
-	{
-		*size = sizeof( shader_main_frag_spirv );
-		return shader_main_frag_spirv;
-	}
-	case FT_RENDERER_API_METAL:
-	{
-		*size = sizeof( shader_main_frag_msl );
-		return shader_main_frag_msl;
-	}
-	case FT_RENDERER_API_D3D12:
-	{
-		return NULL;
-	}
-	default:
-	{
-		*size = 0;
-		return NULL;
-	}
-	}
-}
+DECLARE_SHADER( main_frag )

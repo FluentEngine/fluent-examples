@@ -74,36 +74,17 @@ commons.example("sandbox")
         "sandbox/main.frag.ft"
     }
 
-	commons.compile_shaders("sandbox")
+--	commons.compile_shaders("sandbox")
 
 commons.example("render_graph")
 	files 
 	{
 		"render_graph/main.c",
-		
+		"render_graph/main_pass.h",
+		"render_graph/main_pass.c",
+
 		"render_graph/main.vert.ft",
 		"render_graph/main.frag.ft",
 	}
 	
-	commons.compile_shaders("render_graph")
-	
--- commons.example("test_wsi")
---     files 
---     {
---         "test_wsi/test_wsi.c",
-
--- 		"test_wsi/main.vert.ft",
--- 		"test_wsi/main.frag.ft"
--- 	}
-	
--- 	sysincludedirs
--- 	{	
--- 		vulkan_include_directory
--- 	}
-	
--- 	links 
--- 	{ 
---         "glfw"
---     }
-	
--- 	commons.compile_shaders("test_wsi")
+--	commons.compile_shaders("render_graph")
