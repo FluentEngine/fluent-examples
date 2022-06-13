@@ -80,7 +80,12 @@ commons.example("render_graph")
 	files 
 	{
 		"render_graph/main.c",
+		
+		"render_graph/main.vert.ft",
+		"render_graph/main.frag.ft",
 	}
+	
+	commons.compile_shaders("render_graph")
 	
 -- commons.example("test_wsi")
 --     files 

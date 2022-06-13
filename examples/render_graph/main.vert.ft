@@ -1,0 +1,18 @@
+#include "fluent.hlsl"
+
+static const float2 positions[3] = { (-0.5f).xx, float2(0.5f, -0.5f), float2(0.0f, 0.5f) };
+static const float3 colors[3] = { float3(1.0f, 0.0f, 0.0f), float3(0.0f, 1.0f, 0.0f), float3(0.0f, 0.0f, 1.0f) };
+
+struct VertexOutput
+{
+	float4 position : SV_Position;
+	float3 color : TEXCOORD0;
+};
+
+VertexOutput main(uint vertex_id : SV_VertexID)
+{
+	VertexOutput stage_output;
+	stage_output.position = float4( positions[ vertex_id ], 0.0, 1.0 );
+	stage_output.color    = colors[ vertex_id ];
+	return stage_output;
+}
