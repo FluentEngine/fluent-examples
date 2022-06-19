@@ -9,68 +9,68 @@
 #define INDEX_BUFFER_SIZE  10 * 1024 * 1024 * 8
 #define MAX_DRAW_COUNT     5
 
-struct Vertex
+struct vertex
 {
-	vec3 position;
-	vec3 normal;
-	vec2 texcoord;
-	vec4 joints;
-	vec4 weights;
+	float3 position;
+	float3 normal;
+	float2 texcoord;
+	float4 joints;
+	float4 weights;
 };
 
-struct DrawData
+struct draw_data
 {
-	i32 first_vertex;
-	u32 first_index;
-	u32 index_count;
+	int32_t  first_vertex;
+	uint32_t first_index;
+	uint32_t index_count;
 };
 
-struct ShaderData
+struct shader_data
 {
-	mat4x4 projection;
-	mat4x4 view;
+	float4x4 projection;
+	float4x4 view;
 };
 
-struct MainPassData
+struct main_pass_data
 {
-	const struct Camera* camera;
+	const struct ft_camera* camera;
 
-	u32                         width;
-	u32                         height;
-	enum Format                 swapchain_format;
-	struct DescriptorSetLayout* dsl;
-	struct Pipeline*            pipeline;
-	struct Buffer*              vertex_buffer;
-	struct Buffer*              index_buffer;
-	struct Buffer*              ubo_buffer;
-	struct Buffer*              transforms_buffer;
-	struct DescriptorSet*       set;
+	uint32_t                         width;
+	uint32_t                         height;
+	enum ft_format                   swapchain_format;
+	struct ft_descriptor_set_layout* dsl;
+	struct ft_pipeline*              pipeline;
+	struct ft_buffer*                vertex_buffer;
+	struct ft_buffer*                index_buffer;
+	struct ft_buffer*                ubo_buffer;
+	struct ft_buffer*                transforms_buffer;
+	struct ft_descriptor_set*        set;
 
-	struct Model model;
+	struct ft_model model;
 
-	struct ShaderData shader_data;
-	u32               draw_count;
-	struct DrawData   draws[ MAX_DRAW_COUNT ];
+	struct shader_data shader_data;
+	uint32_t           draw_count;
+	struct draw_data   draws[ MAX_DRAW_COUNT ];
 
-	struct Timer       timer;
+	struct ft_timer    timer;
 	struct nk_context* ui;
 } main_pass_data;
 
-static inline void
-main_pass_create_pipeline( const struct Device* device,
-                           struct MainPassData* data )
+FT_INLINE void
+main_pass_create_pipeline( const struct ft_device* device,
+                           struct main_pass_data*  data )
 {
-	struct ShaderInfo shader_info = {
+	struct ft_shader_info shader_info = {
 	    .vertex   = get_main_vert_shader( device->api ),
 	    .fragment = get_main_frag_shader( device->api ),
 	};
 
-	struct Shader* shader;
-	create_shader( device, &shader_info, &shader );
+	struct ft_shader* shader;
+	ft_create_shader( device, &shader_info, &shader );
 
-	create_descriptor_set_layout( device, shader, &data->dsl );
+	ft_create_descriptor_set_layout( device, shader, &data->dsl );
 
-	struct PipelineInfo info = {
+	struct ft_pipeline_info info = {
 	    .type                  = FT_PIPELINE_TYPE_GRAPHICS,
 	    .shader                = shader,
 	    .descriptor_set_layout = data->dsl,
@@ -96,129 +96,130 @@ main_pass_create_pipeline( const struct Device* device,
 	            .binding_info_count            = 1,
 	            .binding_infos[ 0 ].binding    = 0,
 	            .binding_infos[ 0 ].input_rate = FT_VERTEX_INPUT_RATE_VERTEX,
-	            .binding_infos[ 0 ].stride     = sizeof( struct Vertex ),
+	            .binding_infos[ 0 ].stride     = sizeof( struct vertex ),
 	            .attribute_info_count          = 3,
 	            .attribute_infos[ 0 ].binding  = 0,
 	            .attribute_infos[ 0 ].format   = FT_FORMAT_R32G32B32_SFLOAT,
 	            .attribute_infos[ 0 ].location = 0,
 	            .attribute_infos[ 0 ].offset =
-	                offsetof( struct Vertex, position ),
+	                offsetof( struct vertex, position ),
 	            .attribute_infos[ 1 ].binding  = 0,
 	            .attribute_infos[ 1 ].format   = FT_FORMAT_R32G32B32_SFLOAT,
 	            .attribute_infos[ 1 ].location = 1,
 	            .attribute_infos[ 1 ].offset =
-	                offsetof( struct Vertex, normal ),
+	                offsetof( struct vertex, normal ),
 	            .attribute_infos[ 2 ].binding  = 0,
 	            .attribute_infos[ 2 ].format   = FT_FORMAT_R32G32_SFLOAT,
 	            .attribute_infos[ 2 ].location = 2,
 	            .attribute_infos[ 2 ].offset =
-	                offsetof( struct Vertex, texcoord ),
+	                offsetof( struct vertex, texcoord ),
 	            .attribute_infos[ 3 ].binding  = 0,
 	            .attribute_infos[ 3 ].format   = FT_FORMAT_R32G32B32A32_SFLOAT,
 	            .attribute_infos[ 3 ].location = 3,
 	            .attribute_infos[ 3 ].offset =
-	                offsetof( struct Vertex, joints ),
+	                offsetof( struct vertex, joints ),
 	            .attribute_infos[ 4 ].binding  = 0,
 	            .attribute_infos[ 4 ].format   = FT_FORMAT_R32G32B32A32_SFLOAT,
 	            .attribute_infos[ 4 ].location = 4,
 	            .attribute_infos[ 4 ].offset =
-	                offsetof( struct Vertex, weights ),
+	                offsetof( struct vertex, weights ),
 	        },
 	};
 
-	create_pipeline( device, &info, &data->pipeline );
+	ft_create_pipeline( device, &info, &data->pipeline );
 
-	destroy_shader( device, shader );
+	ft_destroy_shader( device, shader );
 }
 
-static inline void
-main_pass_create_buffers( const struct Device* device,
-                          struct MainPassData* data )
+FT_INLINE void
+main_pass_create_buffers( const struct ft_device* device,
+                          struct main_pass_data*  data )
 {
-	struct BufferInfo info;
+	struct ft_buffer_info info;
 	info.memory_usage    = FT_MEMORY_USAGE_GPU_ONLY;
 	info.descriptor_type = FT_DESCRIPTOR_TYPE_VERTEX_BUFFER;
 	info.size            = VERTEX_BUFFER_SIZE;
-	create_buffer( device, &info, &data->vertex_buffer );
+	ft_create_buffer( device, &info, &data->vertex_buffer );
 	info.descriptor_type = FT_DESCRIPTOR_TYPE_INDEX_BUFFER;
 	info.size            = INDEX_BUFFER_SIZE;
-	create_buffer( device, &info, &data->index_buffer );
+	ft_create_buffer( device, &info, &data->index_buffer );
 	info.descriptor_type = FT_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	info.memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU;
-	info.size            = sizeof( struct ShaderData );
-	create_buffer( device, &info, &data->ubo_buffer );
+	info.size            = sizeof( struct shader_data );
+	ft_create_buffer( device, &info, &data->ubo_buffer );
 	info.descriptor_type = FT_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	info.size            = sizeof( mat4x4 ) * MAX_DRAW_COUNT;
-	create_buffer( device, &info, &data->transforms_buffer );
+	info.size            = sizeof( float4x4 ) * MAX_DRAW_COUNT;
+	ft_create_buffer( device, &info, &data->transforms_buffer );
 }
 
-static inline void
-main_pass_load_scene( const struct Device* device, struct MainPassData* data )
+FT_INLINE void
+main_pass_load_scene( const struct ft_device* device,
+                      struct main_pass_data*  data )
 {
-	data->model = load_gltf( MODEL_PATH );
+	data->model = ft_load_gltf( MODEL_PATH );
 
 	data->draw_count = data->model.mesh_count;
 
-	u32 first_vertex = 0;
-	u32 first_index  = 0;
+	uint32_t first_vertex = 0;
+	uint32_t first_index  = 0;
 
-	begin_upload_batch();
+	ft_begin_upload_batch();
 
-	for ( u32 m = 0; m < data->draw_count; ++m )
+	for ( uint32_t m = 0; m < data->draw_count; ++m )
 	{
-		const struct Mesh* mesh = &data->model.meshes[ m ];
+		const struct ft_mesh* mesh = &data->model.meshes[ m ];
 
 		data->draws[ m ].index_count  = mesh->index_count;
 		data->draws[ m ].first_vertex = first_vertex;
 
-		struct Vertex* vertices =
-		    malloc( sizeof( struct Vertex ) * mesh->vertex_count );
+		struct vertex* vertices =
+		    malloc( sizeof( struct vertex ) * mesh->vertex_count );
 
-		for ( u32 v = 0; v < mesh->vertex_count; ++v )
+		for ( uint32_t v = 0; v < mesh->vertex_count; ++v )
 		{
 			memcpy( vertices[ v ].position,
 			        &mesh->positions[ v * 3 ],
-			        3 * sizeof( f32 ) );
+			        3 * sizeof( float ) );
 
 			if ( mesh->normals )
 			{
 				memcpy( vertices[ v ].normal,
 				        &mesh->normals[ v * 3 ],
-				        3 * sizeof( f32 ) );
+				        3 * sizeof( float ) );
 			}
 
 			if ( mesh->texcoords )
 			{
 				memcpy( vertices[ v ].texcoord,
 				        &mesh->texcoords[ v * 2 ],
-				        2 * sizeof( f32 ) );
+				        2 * sizeof( float ) );
 			}
 
 			if ( mesh->joints )
 			{
 				memcpy( vertices[ v ].joints,
 				        &mesh->joints[ v * 4 ],
-				        4 * sizeof( f32 ) );
+				        4 * sizeof( float ) );
 			}
 
 			if ( mesh->weights )
 			{
 				memcpy( vertices[ v ].weights,
 				        &mesh->joints[ v * 4 ],
-				        4 * sizeof( f32 ) );
+				        4 * sizeof( float ) );
 			}
 		}
 
 		data->draws[ m ].first_index = first_index;
 
-		upload_buffer( data->vertex_buffer,
-		               first_vertex * sizeof( struct Vertex ),
-		               sizeof( struct Vertex ) * mesh->vertex_count,
-		               vertices );
-		upload_buffer( data->index_buffer,
-		               first_index * sizeof( u16 ),
-		               mesh->index_count * sizeof( u16 ),
-		               mesh->indices );
+		ft_upload_buffer( data->vertex_buffer,
+		                  first_vertex * sizeof( struct vertex ),
+		                  sizeof( struct vertex ) * mesh->vertex_count,
+		                  vertices );
+		ft_upload_buffer( data->index_buffer,
+		                  first_index * sizeof( uint16_t ),
+		                  mesh->index_count * sizeof( uint16_t ),
+		                  mesh->indices );
 
 		first_index += mesh->index_count;
 		first_vertex += mesh->vertex_count;
@@ -226,38 +227,38 @@ main_pass_load_scene( const struct Device* device, struct MainPassData* data )
 		free( vertices );
 	}
 
-	end_upload_batch();
+	ft_end_upload_batch();
 }
 
-static inline void
-main_pass_create_descriptor_sets( const struct Device* device,
-                                  struct MainPassData* data )
+FT_INLINE void
+main_pass_create_descriptor_sets( const struct ft_device* device,
+                                  struct main_pass_data*  data )
 {
-	struct DescriptorSetInfo set_info = {
+	struct ft_descriptor_set_info set_info = {
 	    .descriptor_set_layout = data->dsl,
 	    .set                   = 0,
 	};
 
-	create_descriptor_set( device, &set_info, &data->set );
+	ft_create_descriptor_set( device, &set_info, &data->set );
 }
 
-static inline void
-main_pass_write_descriptors( const struct Device* device,
-                             struct MainPassData* data )
+FT_INLINE void
+main_pass_write_descriptors( const struct ft_device* device,
+                             struct main_pass_data*  data )
 {
-	struct BufferDescriptor buffer_descriptor = {
+	struct ft_buffer_descriptor buffer_descriptor = {
 	    .buffer = data->ubo_buffer,
 	    .offset = 0,
-	    .range  = sizeof( struct ShaderData ),
+	    .range  = sizeof( struct shader_data ),
 	};
 
-	struct BufferDescriptor tbuffer_descriptor = {
+	struct ft_buffer_descriptor tbuffer_descriptor = {
 	    .buffer = data->transforms_buffer,
 	    .offset = 0,
-	    .range  = MAX_DRAW_COUNT * sizeof( mat4x4 ),
+	    .range  = MAX_DRAW_COUNT * sizeof( float4x4 ),
 	};
 
-	struct DescriptorWrite descriptor_writes[ 2 ] = {
+	struct ft_descriptor_write descriptor_writes[ 2 ] = {
 	    [0] =
 	        {
 	            .buffer_descriptors  = &buffer_descriptor,
@@ -275,24 +276,25 @@ main_pass_write_descriptors( const struct Device* device,
 	            .sampler_descriptors = NULL,
 	        },
 	};
-	update_descriptor_set( device, data->set, 2, descriptor_writes );
+	ft_update_descriptor_set( device, data->set, 2, descriptor_writes );
 }
 
-static inline void
-main_pass_update_ubo( const struct Device* device, struct MainPassData* data )
+FT_INLINE void
+main_pass_update_ubo( const struct ft_device* device,
+                      struct main_pass_data*  data )
 {
-	mat4x4_dup( data->shader_data.view, data->camera->view );
-	mat4x4_dup( data->shader_data.projection, data->camera->projection );
+	float4x4_dup( data->shader_data.view, data->camera->view );
+	float4x4_dup( data->shader_data.projection, data->camera->projection );
 
-	u8* dst = map_memory( device, data->ubo_buffer );
-	memcpy( dst, &data->shader_data, sizeof( struct ShaderData ) );
-	unmap_memory( device, data->ubo_buffer );
+	uint8_t* dst = ft_map_memory( device, data->ubo_buffer );
+	memcpy( dst, &data->shader_data, sizeof( struct shader_data ) );
+	ft_unmap_memory( device, data->ubo_buffer );
 }
 
 static void
-main_pass_create( const struct Device* device, void* user_data )
+main_pass_create( const struct ft_device* device, void* user_data )
 {
-	struct MainPassData* data = user_data;
+	struct main_pass_data* data = user_data;
 	main_pass_create_pipeline( device, data );
 	main_pass_create_buffers( device, data );
 	main_pass_load_scene( device, data );
@@ -301,32 +303,32 @@ main_pass_create( const struct Device* device, void* user_data )
 }
 
 static void
-apply_animation( mat4x4                  r,
-                 float                   current_time,
-                 const struct Animation* animation )
+apply_animation( float4x4*                  r,
+                 float                      current_time,
+                 const struct ft_animation* animation )
 {
 	current_time = fmod( current_time, animation->duration );
 
-	vec3 translation = { 0.0f, 0.0f, 0.0f };
-	quat rotation    = { 0.0f, 0.0f, 0.0f, -1.0f };
-	vec3 scale       = { 1.0f, 1.0f, 1.0f };
+	float3 translation = { 0.0f, 0.0f, 0.0f };
+	quat   rotation    = { 0.0f, 0.0f, 0.0f, -1.0f };
+	float3 scale       = { 1.0f, 1.0f, 1.0f };
 
-	for ( u32 ch = 0; ch < animation->channel_count; ++ch )
+	for ( uint32_t ch = 0; ch < animation->channel_count; ++ch )
 	{
-		struct AnimationChannel* channel = &animation->channels[ ch ];
-		struct AnimationSampler* sampler = channel->sampler;
+		struct ft_animation_channel* channel = &animation->channels[ ch ];
+		struct ft_animation_sampler* sampler = channel->sampler;
 
 		if ( sampler->frame_count < 2 )
 		{
 			continue;
 		}
 
-		u32 previous_frame = 0;
-		u32 next_frame     = 0;
+		uint32_t previous_frame = 0;
+		uint32_t next_frame     = 0;
 
 		float interpolation_value = 0.0f;
 
-		for ( u32 f = 0; f < sampler->frame_count; f++ )
+		for ( uint32_t f = 0; f < sampler->frame_count; f++ )
 		{
 			if ( sampler->times[ f ] >= current_time )
 			{
@@ -352,11 +354,15 @@ apply_animation( mat4x4                  r,
 		{
 		case FT_TRANSFORM_TYPE_TRANSLATION:
 		{
-			vec3* translations = ( vec3* ) sampler->values;
-			vec3_lerp( translation,
-			           translations[ previous_frame ],
-			           translations[ next_frame ],
-			           interpolation_value );
+			float3* translations = ( float3* ) sampler->values;
+			float3_lerp( translation,
+			             translations[ previous_frame ],
+			             translations[ next_frame ],
+			             interpolation_value );
+			float4x4_compose( r[ channel->target ],
+			                  translation,
+			                  rotation,
+			                  scale );
 			break;
 		}
 		case FT_TRANSFORM_TYPE_ROTATION:
@@ -366,34 +372,36 @@ apply_animation( mat4x4                  r,
 			       quats[ previous_frame ],
 			       quats[ next_frame ],
 			       interpolation_value );
+			float4x4_compose( r[ channel->target ],
+			                  translation,
+			                  rotation,
+			                  scale );
 			break;
 		}
 		case FT_TRANSFORM_TYPE_SCALE:
 		{
-			vec3* scales = ( vec3* ) sampler->values;
-			vec3_lerp( scale,
-			           scales[ previous_frame ],
-			           scales[ next_frame ],
-			           interpolation_value );
+			float3* scales = ( float3* ) sampler->values;
+			float3_lerp( scale,
+			             scales[ previous_frame ],
+			             scales[ next_frame ],
+			             interpolation_value );
 			break;
 		}
 		}
 	}
-
-	mat4x4_compose( r, translation, rotation, scale );
 }
 
 static void
-main_pass_draw_ui( struct CommandBuffer* cmd, struct MainPassData* data )
+main_pass_draw_ui( struct ft_command_buffer* cmd, struct main_pass_data* data )
 {
-	static struct Timer fps_timer;
-	static b32          first_time = 1;
-	static u64          frames     = 0;
-	static f64          fps        = 0;
+	static struct ft_timer fps_timer;
+	static bool            first_time = 1;
+	static uint64_t        frames     = 0;
+	static double          fps        = 0;
 
 	if ( first_time )
 	{
-		timer_reset( &fps_timer );
+		ft_timer_reset( &fps_timer );
 		first_time = 0;
 	}
 
@@ -416,77 +424,79 @@ main_pass_draw_ui( struct CommandBuffer* cmd, struct MainPassData* data )
 
 	if ( frames > 5 )
 	{
-		fps = frames / ( ( ( f64 ) timer_get_ticks( &fps_timer ) ) / 1000.0f );
+		fps = frames /
+		      ( ( ( double ) ft_timer_get_ticks( &fps_timer ) ) / 1000.0f );
 		frames = 0;
-		timer_reset( &fps_timer );
+		ft_timer_reset( &fps_timer );
 	}
 }
 
 static void
-main_pass_execute( const struct Device*  device,
-                   struct CommandBuffer* cmd,
-                   void*                 user_data )
+main_pass_execute( const struct ft_device*   device,
+                   struct ft_command_buffer* cmd,
+                   void*                     user_data )
 {
-	struct MainPassData* data = user_data;
+	struct main_pass_data* data = user_data;
 
 	main_pass_update_ubo( device, data );
 
-	cmd_set_scissor( cmd, 0, 0, data->width, data->height );
-	cmd_set_viewport( cmd, 0, 0, data->width, data->height, 0, 1.0f );
+	ft_cmd_set_scissor( cmd, 0, 0, data->width, data->height );
+	ft_cmd_set_viewport( cmd, 0, 0, data->width, data->height, 0, 1.0f );
 
-	cmd_bind_pipeline( cmd, data->pipeline );
-	cmd_bind_descriptor_set( cmd, 0, data->set, data->pipeline );
-	cmd_bind_vertex_buffer( cmd, data->vertex_buffer, 0 );
-	cmd_bind_index_buffer( cmd, data->index_buffer, 0, FT_INDEX_TYPE_U16 );
+	ft_cmd_bind_pipeline( cmd, data->pipeline );
+	ft_cmd_bind_descriptor_set( cmd, 0, data->set, data->pipeline );
+	ft_cmd_bind_vertex_buffer( cmd, data->vertex_buffer, 0 );
+	ft_cmd_bind_index_buffer( cmd, data->index_buffer, 0, FT_INDEX_TYPE_U16 );
 
-	for ( u32 i = 0; i < data->draw_count; ++i )
+	for ( uint32_t i = 0; i < data->draw_count; ++i )
 	{
-		struct DrawData* draw = &data->draws[ i ];
+		struct draw_data* draw = &data->draws[ i ];
 
-		mat4x4* transforms = map_memory( device, data->transforms_buffer );
-		mat4x4_dup( transforms[ i ], data->model.meshes[ i ].world );
+		float4x4* transforms = ft_map_memory( device, data->transforms_buffer );
+		float4x4_dup( transforms[ i ], data->model.meshes[ i ].world );
 
-		for ( u32 a = 0; a < data->model.animation_count; ++a )
+		for ( uint32_t a = 0; a < data->model.animation_count; ++a )
 		{
 			if ( i == 1 )
 			{
 				apply_animation(
-				    transforms[ i ],
-				    ( ( f32 ) ( timer_get_ticks( &data->timer ) ) ) / 1000.0f,
+				    transforms,
+				    ( ( float ) ( ft_timer_get_ticks( &data->timer ) ) ) /
+				        1000.0f,
 				    &data->model.animations[ a ] );
 			}
 		}
 
-		unmap_memory( device, data->transforms_buffer );
+		ft_unmap_memory( device, data->transforms_buffer );
 
-		cmd_push_constants( cmd, data->pipeline, 0, sizeof( u32 ), &i );
-		cmd_draw_indexed( cmd,
-		                  draw->index_count,
-		                  1,
-		                  draw->first_index,
-		                  draw->first_vertex,
-		                  0 );
+		ft_cmd_push_constants( cmd, data->pipeline, 0, sizeof( uint32_t ), &i );
+		ft_cmd_draw_indexed( cmd,
+		                     draw->index_count,
+		                     1,
+		                     draw->first_index,
+		                     draw->first_vertex,
+		                     0 );
 	}
 
 	main_pass_draw_ui( cmd, data );
 }
 
 static void
-main_pass_destroy( const struct Device* device, void* user_data )
+main_pass_destroy( const struct ft_device* device, void* user_data )
 {
-	struct MainPassData* data = user_data;
-	destroy_descriptor_set( device, data->set );
-	free_gltf( &data->model );
-	destroy_buffer( device, data->transforms_buffer );
-	destroy_buffer( device, data->ubo_buffer );
-	destroy_buffer( device, data->index_buffer );
-	destroy_buffer( device, data->vertex_buffer );
-	destroy_pipeline( device, data->pipeline );
-	destroy_descriptor_set_layout( device, data->dsl );
+	struct main_pass_data* data = user_data;
+	ft_destroy_descriptor_set( device, data->set );
+	ft_free_gltf( &data->model );
+	ft_destroy_buffer( device, data->transforms_buffer );
+	ft_destroy_buffer( device, data->ubo_buffer );
+	ft_destroy_buffer( device, data->index_buffer );
+	ft_destroy_buffer( device, data->vertex_buffer );
+	ft_destroy_pipeline( device, data->pipeline );
+	ft_destroy_descriptor_set_layout( device, data->dsl );
 }
 
-static b32
-main_pass_get_clear_color( u32 idx, ColorClearValue* color )
+static bool
+main_pass_get_clear_color( uint32_t idx, ft_color_clear_value* color )
 {
 	switch ( idx )
 	{
@@ -496,48 +506,49 @@ main_pass_get_clear_color( u32 idx, ColorClearValue* color )
 		( *color )[ 1 ] = 0.2f;
 		( *color )[ 2 ] = 0.3f;
 		( *color )[ 3 ] = 1.0f;
-		return 1;
+		return true;
 	}
-	default: return 0;
+	default: return false;
 	}
 }
 
-static b32
+static bool
 main_pass_get_clear_depth_stencil(
-    struct DepthStencilClearValue* depth_stencil )
+    struct ft_depth_stencil_clear_value* depth_stencil )
 {
 	depth_stencil->depth   = 1.0f;
 	depth_stencil->stencil = 0;
 
-	return 1;
+	return true;
 }
 
 void
-register_main_pass( struct RenderGraph*     graph,
-                    const struct Swapchain* swapchain,
-                    const char*             backbuffer_source_name,
-                    const struct Camera*    camera,
-                    struct nk_context*      ui )
+register_main_pass( struct ft_render_graph*    graph,
+                    const struct ft_swapchain* swapchain,
+                    const char*                backbuffer_source_name,
+                    const struct ft_camera*    camera,
+                    struct nk_context*         ui )
 {
 	main_pass_data.width            = swapchain->width;
 	main_pass_data.height           = swapchain->height;
 	main_pass_data.swapchain_format = swapchain->format;
 	main_pass_data.camera           = camera;
 	main_pass_data.ui               = ui;
-	timer_reset( &main_pass_data.timer );
+	ft_timer_reset( &main_pass_data.timer );
 
-	struct RenderPass* pass;
-	rg_add_pass( graph, "main", &pass );
-	rg_set_user_data( pass, &main_pass_data );
-	rg_set_pass_create_callback( pass, main_pass_create );
-	rg_set_pass_execute_callback( pass, main_pass_execute );
-	rg_set_pass_destroy_callback( pass, main_pass_destroy );
-	rg_set_get_clear_color( pass, main_pass_get_clear_color );
-	rg_set_get_clear_depth_stencil( pass, main_pass_get_clear_depth_stencil );
+	struct ft_render_pass* pass;
+	ft_rg_add_pass( graph, "main", &pass );
+	ft_rg_set_user_data( pass, &main_pass_data );
+	ft_rg_set_pass_create_callback( pass, main_pass_create );
+	ft_rg_set_pass_execute_callback( pass, main_pass_execute );
+	ft_rg_set_pass_destroy_callback( pass, main_pass_destroy );
+	ft_rg_set_get_clear_color( pass, main_pass_get_clear_color );
+	ft_rg_set_get_clear_depth_stencil( pass,
+	                                   main_pass_get_clear_depth_stencil );
 
-	struct ImageInfo back;
-	rg_add_color_output( pass, backbuffer_source_name, &back );
-	struct ImageInfo depth_image = {
+	struct ft_image_info back;
+	ft_rg_add_color_output( pass, backbuffer_source_name, &back );
+	struct ft_image_info depth_image = {
 	    .width        = main_pass_data.width,
 	    .height       = main_pass_data.height,
 	    .depth        = 1,
@@ -546,5 +557,5 @@ register_main_pass( struct RenderGraph*     graph,
 	    .mip_levels   = 1,
 	    .sample_count = 1,
 	};
-	rg_add_depth_stencil_output( pass, "depth", &depth_image );
+	ft_rg_add_depth_stencil_output( pass, "depth", &depth_image );
 }
