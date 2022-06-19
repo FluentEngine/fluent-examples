@@ -222,6 +222,8 @@ main_pass_load_scene( const struct Device* device, struct MainPassData* data )
 
 		first_index += mesh->index_count;
 		first_vertex += mesh->vertex_count;
+
+		free( vertices );
 	}
 
 	end_upload_batch();
@@ -314,26 +316,37 @@ apply_animation( mat4x4                  r,
 		struct AnimationChannel* channel = &animation->channels[ ch ];
 		struct AnimationSampler* sampler = channel->sampler;
 
-		float previous_time = 0;
-		float next_time     = 0;
+		if ( sampler->frame_count < 2 )
+		{
+			continue;
+		}
 
 		u32 previous_frame = 0;
 		u32 next_frame     = 0;
 
-		for ( u32 f = 0; f < sampler->frame_count - 1; f++ )
+		float interpolation_value = 0.0f;
+
+		for ( u32 f = 0; f < sampler->frame_count; f++ )
 		{
-			if ( sampler->times[ f + 1 ] > current_time )
+			if ( sampler->times[ f ] >= current_time )
 			{
-				previous_time  = sampler->times[ f ];
-				next_time      = sampler->times[ f + 1 ];
-				previous_frame = f;
-				next_frame     = f + 1;
+				next_frame = f;
 				break;
 			}
 		}
 
-		float interpolation_value =
-		    ( current_time - previous_time ) / ( next_time - previous_time );
+		if ( next_frame == 0 )
+		{
+			previous_frame = 0;
+		}
+		else
+		{
+			previous_frame = next_frame - 1;
+			interpolation_value =
+			    ( current_time - sampler->times[ previous_frame ] ) /
+			    ( sampler->times[ next_frame ] -
+			      sampler->times[ previous_frame ] );
+		}
 
 		switch ( channel->transform_type )
 		{
@@ -353,6 +366,15 @@ apply_animation( mat4x4                  r,
 			       quats[ previous_frame ],
 			       quats[ next_frame ],
 			       interpolation_value );
+			break;
+		}
+		case FT_TRANSFORM_TYPE_SCALE:
+		{
+			vec3* scales = ( vec3* ) sampler->values;
+			vec3_lerp( scale,
+			           scales[ previous_frame ],
+			           scales[ next_frame ],
+			           interpolation_value );
 			break;
 		}
 		}
@@ -378,7 +400,7 @@ main_pass_draw_ui( struct CommandBuffer* cmd, struct MainPassData* data )
 	nk_ft_new_frame();
 	if ( nk_begin( data->ui,
 	               "Debug Menu",
-	               nk_rect( 0, 0, 200, data->width ),
+	               nk_rect( 0, 0, 200, data->height ),
 	               NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR |
 	                   NK_WINDOW_NO_INPUT | NK_WINDOW_NOT_INTERACTIVE ) )
 	{
@@ -388,7 +410,7 @@ main_pass_draw_ui( struct CommandBuffer* cmd, struct MainPassData* data )
 		nk_label( data->ui, fps_str, NK_TEXT_ALIGN_LEFT );
 	}
 	nk_end( data->ui );
-	nk_ft_render( cmd, NK_ANTI_ALIASING_ON );
+	nk_ft_render( cmd, NK_ANTI_ALIASING_OFF );
 
 	frames++;
 

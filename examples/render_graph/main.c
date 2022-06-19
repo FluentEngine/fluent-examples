@@ -111,6 +111,8 @@ on_resize( u32 width, u32 height )
 {
 	queue_wait_idle( graphics_queue );
 	resize_swapchain( device, swapchain, width, height );
+	rg_set_swapchain_dimensions( graph, swapchain->width, swapchain->height );
+	rg_build( graph );
 }
 
 static void
