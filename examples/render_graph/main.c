@@ -4,8 +4,8 @@
 #include "main_pass.h"
 
 #define FRAME_COUNT   2
-#define WINDOW_WIDTH  600
-#define WINDOW_HEIGHT 480
+#define WINDOW_WIDTH  1400
+#define WINDOW_HEIGHT 900
 
 struct FrameData
 {
@@ -29,6 +29,12 @@ static u32                     image_index = 0;
 
 struct RenderGraph* graph;
 
+static struct Camera           camera;
+static struct CameraController camera_controller;
+
+struct nk_context*    ctx;
+struct nk_font_atlas* atlas;
+
 static void
 init_renderer( void );
 static void
@@ -42,10 +48,34 @@ end_frame( void );
 static void
 on_init( void )
 {
+	struct CameraInfo camera_info = {
+	    .fov         = radians( 45.0f ),
+	    .aspect      = window_get_aspect( get_app_window() ),
+	    .near        = 0.1f,
+	    .far         = 1000.0f,
+	    .speed       = 5.0f,
+	    .sensitivity = 0.12f,
+	    .position    = { 0.0f, 0.0f, 3.0f },
+	    .direction   = { 0.0f, 0.0f, -1.0f },
+	    .up          = { 0.0f, 1.0f, 0.0f },
+	};
+
+	camera_init( &camera, &camera_info );
+	camera_controller_init( &camera_controller, &camera );
+
 	init_renderer();
 
+	ctx = nk_ft_init( get_ft_wsi_info(),
+	                  device,
+	                  graphics_queue,
+	                  swapchain->format,
+	                  FT_FORMAT_D32_SFLOAT );
+
+	nk_ft_font_stash_begin( &atlas );
+	nk_ft_font_stash_end();
+
 	rg_create( device, &graph );
-	register_main_pass( graph, swapchain, "back" );
+	register_main_pass( graph, swapchain, "back", &camera, ctx );
 	rg_set_backbuffer_source( graph, "back" );
 	rg_set_swapchain_dimensions( graph, swapchain->width, swapchain->height );
 	rg_build( graph );
@@ -54,7 +84,14 @@ on_init( void )
 static void
 on_update( f32 delta_time )
 {
-	FT_UNUSED( delta_time );
+	if ( is_key_pressed( FT_KEY_LEFT_ALT ) )
+	{
+		camera_controller_update( &camera_controller, delta_time );
+	}
+	else
+	{
+		camera_controller_reset( &camera_controller );
+	}
 
 	begin_frame();
 
@@ -81,6 +118,7 @@ on_shutdown( void )
 {
 	queue_wait_idle( graphics_queue );
 	rg_destroy( graph );
+	nk_ft_shutdown();
 	shutdown_renderer();
 }
 

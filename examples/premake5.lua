@@ -15,6 +15,8 @@ project(name)
         defines { "NDEBUG" }
 	filter {}
 	
+	defines { "MODEL_FOLDER=" .. '"' .. path.getabsolute("../../glTF-Sample-Models/2.0/") .. '"' }
+
 	includedirs 
 	{
         "../deps/fluent/sources",
@@ -65,26 +67,16 @@ commons.compile_shaders = function(ex)
 	filter {}
 end
 
-commons.example("sandbox")
-    files 
-    {
-        "sandbox/main.c",
-
-        "sandbox/main.vert.ft",
-        "sandbox/main.frag.ft"
-    }
-
---	commons.compile_shaders("sandbox")
-
 commons.example("render_graph")
 	files 
 	{
 		"render_graph/main.c",
 		"render_graph/main_pass.h",
 		"render_graph/main_pass.c",
+		"render_graph/shader_main_vert_spirv.c",
+		"render_graph/shader_main_frag_spirv.c",
 
 		"render_graph/main.vert.ft",
 		"render_graph/main.frag.ft",
 	}
 	
---	commons.compile_shaders("render_graph")
