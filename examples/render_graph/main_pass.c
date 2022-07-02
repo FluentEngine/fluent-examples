@@ -8,6 +8,9 @@
 #define VERTEX_BUFFER_SIZE 10 * 1024 * 1024 * 8
 #define INDEX_BUFFER_SIZE  10 * 1024 * 1024 * 8
 #define MAX_DRAW_COUNT     5
+#define VERTEX_BUFFER_SIZE 20 * 1024 * 1024 * 8
+#define INDEX_BUFFER_SIZE  20 * 1024 * 1024 * 8
+#define MAX_DRAW_COUNT     200
 
 struct vertex
 {
@@ -20,9 +23,10 @@ struct vertex
 
 struct draw_data
 {
-	int32_t  first_vertex;
-	uint32_t first_index;
-	uint32_t index_count;
+	int32_t            first_vertex;
+	uint32_t           first_index;
+	uint32_t           index_count;
+	enum ft_index_type index_type;
 };
 
 struct shader_data
@@ -41,7 +45,8 @@ struct main_pass_data
 	struct ft_descriptor_set_layout* dsl;
 	struct ft_pipeline*              pipeline;
 	struct ft_buffer*                vertex_buffer;
-	struct ft_buffer*                index_buffer;
+	struct ft_buffer*                index_buffer_u16;
+	struct ft_buffer*                index_buffer_u32;
 	struct ft_buffer*                ubo_buffer;
 	struct ft_buffer*                transforms_buffer;
 	struct ft_descriptor_set*        set;
@@ -142,7 +147,9 @@ main_pass_create_buffers( const struct ft_device* device,
 	ft_create_buffer( device, &info, &data->vertex_buffer );
 	info.descriptor_type = FT_DESCRIPTOR_TYPE_INDEX_BUFFER;
 	info.size            = INDEX_BUFFER_SIZE;
-	ft_create_buffer( device, &info, &data->index_buffer );
+	ft_create_buffer( device, &info, &data->index_buffer_u16 );
+	info.size = INDEX_BUFFER_SIZE * 2;
+	ft_create_buffer( device, &info, &data->index_buffer_u32 );
 	info.descriptor_type = FT_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	info.memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU;
 	info.size            = sizeof( struct shader_data );
@@ -168,6 +175,22 @@ main_pass_load_scene( const struct ft_device* device,
 	for ( uint32_t m = 0; m < data->draw_count; ++m )
 	{
 		const struct ft_mesh* mesh = &data->model.meshes[ m ];
+
+		struct ft_buffer* index_buffer;
+		size_t            index_size = 0;
+
+		if ( mesh->is_32bit_indices )
+		{
+			index_buffer                = data->index_buffer_u32;
+			data->draws[ m ].index_type = FT_INDEX_TYPE_U32;
+			index_size                  = sizeof( uint32_t );
+		}
+		else
+		{
+			index_buffer                = data->index_buffer_u16;
+			data->draws[ m ].index_type = FT_INDEX_TYPE_U16;
+			index_size                  = sizeof( uint16_t );
+		}
 
 		data->draws[ m ].index_count  = mesh->index_count;
 		data->draws[ m ].first_vertex = first_vertex;
@@ -216,9 +239,9 @@ main_pass_load_scene( const struct ft_device* device,
 		                  first_vertex * sizeof( struct vertex ),
 		                  sizeof( struct vertex ) * mesh->vertex_count,
 		                  vertices );
-		ft_upload_buffer( data->index_buffer,
-		                  first_index * sizeof( uint16_t ),
-		                  mesh->index_count * sizeof( uint16_t ),
+		ft_upload_buffer( index_buffer,
+		                  first_index * index_size,
+		                  mesh->index_count * index_size,
 		                  mesh->indices );
 
 		first_index += mesh->index_count;
@@ -453,7 +476,6 @@ main_pass_execute( const struct ft_device*   device,
 	ft_cmd_bind_pipeline( cmd, data->pipeline );
 	ft_cmd_bind_descriptor_set( cmd, 0, data->set, data->pipeline );
 	ft_cmd_bind_vertex_buffer( cmd, data->vertex_buffer, 0 );
-	ft_cmd_bind_index_buffer( cmd, data->index_buffer, 0, FT_INDEX_TYPE_U16 );
 
 	float4x4* transforms = ft_map_memory( device, data->transforms_buffer );
 
@@ -477,6 +499,25 @@ main_pass_execute( const struct ft_device*   device,
 		struct draw_data* draw = &data->draws[ i ];
 
 		ft_cmd_push_constants( cmd, data->pipeline, 0, sizeof( uint32_t ), &i );
+
+		struct ft_buffer* index_buffer;
+
+		switch ( draw->index_type )
+		{
+		case FT_INDEX_TYPE_U16:
+		{
+			index_buffer = data->index_buffer_u16;
+			break;
+		}
+		case FT_INDEX_TYPE_U32:
+		{
+			index_buffer = data->index_buffer_u32;
+			break;
+		}
+		}
+
+		ft_cmd_bind_index_buffer( cmd, index_buffer, 0, draw->index_type );
+
 		ft_cmd_draw_indexed( cmd,
 		                     draw->index_count,
 		                     1,
@@ -496,7 +537,8 @@ main_pass_destroy( const struct ft_device* device, void* user_data )
 	ft_free_gltf( &data->model );
 	ft_destroy_buffer( device, data->transforms_buffer );
 	ft_destroy_buffer( device, data->ubo_buffer );
-	ft_destroy_buffer( device, data->index_buffer );
+	ft_destroy_buffer( device, data->index_buffer_u32 );
+	ft_destroy_buffer( device, data->index_buffer_u16 );
 	ft_destroy_buffer( device, data->vertex_buffer );
 	ft_destroy_pipeline( device, data->pipeline );
 	ft_destroy_descriptor_set_layout( device, data->dsl );
