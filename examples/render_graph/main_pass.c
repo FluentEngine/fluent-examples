@@ -4,10 +4,7 @@
 #include "main.frag.h"
 #include "main_pass.h"
 
-#define MODEL_PATH         MODEL_FOLDER "/BoxAnimated/glTF/BoxAnimated.gltf"
-#define VERTEX_BUFFER_SIZE 10 * 1024 * 1024 * 8
-#define INDEX_BUFFER_SIZE  10 * 1024 * 1024 * 8
-#define MAX_DRAW_COUNT     5
+#define MODEL_PATH         MODEL_FOLDER "/Sponza/glTF/Sponza.gltf"
 #define VERTEX_BUFFER_SIZE 20 * 1024 * 1024 * 8
 #define INDEX_BUFFER_SIZE  20 * 1024 * 1024 * 8
 #define MAX_DRAW_COUNT     200
@@ -23,10 +20,11 @@ struct vertex
 
 struct draw_data
 {
-	int32_t            first_vertex;
-	uint32_t           first_index;
-	uint32_t           index_count;
-	enum ft_index_type index_type;
+	int32_t                   first_vertex;
+	uint32_t                  first_index;
+	uint32_t                  index_count;
+	enum ft_index_type        index_type;
+	struct ft_descriptor_set* material_set;
 };
 
 struct shader_data
@@ -56,6 +54,9 @@ struct main_pass_data
 	struct shader_data shader_data;
 	uint32_t           draw_count;
 	struct draw_data   draws[ MAX_DRAW_COUNT ];
+	uint32_t           model_image_count;
+	struct ft_sampler* sampler;
+	struct ft_image**  model_images;
 
 	struct ft_timer    timer;
 	struct nk_context* ui;
@@ -160,6 +161,29 @@ main_pass_create_buffers( const struct ft_device* device,
 }
 
 FT_INLINE void
+main_pass_create_sampler( const struct ft_device* device,
+                          struct main_pass_data*  data )
+{
+	struct ft_sampler_info info = {
+	    .mag_filter        = FT_FILTER_LINEAR,
+	    .min_filter        = FT_FILTER_LINEAR,
+	    .mipmap_mode       = FT_SAMPLER_MIPMAP_MODE_LINEAR,
+	    .address_mode_u    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
+	    .address_mode_v    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
+	    .address_mode_w    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
+	    .mip_lod_bias      = 0,
+	    .anisotropy_enable = 0,
+	    .max_anisotropy    = 16,
+	    .compare_enable    = 0,
+	    .compare_op        = FT_COMPARE_OP_ALWAYS,
+	    .min_lod           = 0,
+	    .max_lod           = 16,
+	};
+
+	ft_create_sampler( device, &info, &data->sampler );
+}
+
+FT_INLINE void
 main_pass_load_scene( const struct ft_device* device,
                       struct main_pass_data*  data )
 {
@@ -169,6 +193,35 @@ main_pass_load_scene( const struct ft_device* device,
 
 	uint32_t first_vertex = 0;
 	uint32_t first_index  = 0;
+
+	data->model_image_count = data->model.texture_count;
+	if ( data->model_image_count != 0 )
+	{
+		data->model_images =
+		    calloc( data->model.texture_count, sizeof( struct ft_image* ) );
+	}
+
+	for ( uint32_t t = 0; t < data->model.texture_count; ++t )
+	{
+		struct ft_texture* texture = &data->model.textures[ t ];
+
+		struct ft_image_info image_info = {
+		    .width           = texture->width,
+		    .height          = texture->height,
+		    .depth           = 1,
+		    .format          = FT_FORMAT_R8G8B8A8_SRGB,
+		    .sample_count    = 1,
+		    .layer_count     = 1,
+		    .mip_levels      = 1,
+		    .descriptor_type = FT_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+		};
+
+		ft_create_image( device, &image_info, &data->model_images[ t ] );
+
+		ft_upload_image( data->model_images[ t ],
+		                 texture->width * texture->height * 4,
+		                 texture->data );
+	}
 
 	ft_begin_upload_batch();
 
@@ -248,6 +301,42 @@ main_pass_load_scene( const struct ft_device* device,
 		first_vertex += mesh->vertex_count;
 
 		free( vertices );
+
+		if ( mesh->material.metallic_roughness.base_color_texture !=
+		     UINT32_MAX )
+		{
+			struct ft_descriptor_set_info set_info = {
+			    .set                   = 1,
+			    .descriptor_set_layout = data->dsl,
+			};
+
+			struct ft_descriptor_set* set;
+			ft_create_descriptor_set( device, &set_info, &set );
+
+			struct ft_sampler_descriptor sampler_descriptor = {
+			    .sampler = data->sampler,
+			};
+
+			struct ft_image_descriptor image_descriptors[ 1 ];
+			image_descriptors[ 0 ].image =
+			    data->model_images[ mesh->material.metallic_roughness
+			                            .base_color_texture ];
+			image_descriptors[ 0 ].resource_state =
+			    FT_RESOURCE_STATE_SHADER_READ_ONLY;
+
+			struct ft_descriptor_write descriptor_writes[ 2 ];
+			memset( descriptor_writes, 0, sizeof( descriptor_writes ) );
+			descriptor_writes[ 0 ].descriptor_count    = 1;
+			descriptor_writes[ 0 ].descriptor_name     = "u_sampler";
+			descriptor_writes[ 0 ].sampler_descriptors = &sampler_descriptor;
+			descriptor_writes[ 1 ].descriptor_count    = 1;
+			descriptor_writes[ 1 ].descriptor_name     = "u_textures";
+			descriptor_writes[ 1 ].image_descriptors   = image_descriptors;
+
+			ft_update_descriptor_set( device, set, 2, descriptor_writes );
+
+			data->draws[ m ].material_set = set;
+		}
 	}
 
 	ft_end_upload_batch();
@@ -320,6 +409,7 @@ main_pass_create( const struct ft_device* device, void* user_data )
 	struct main_pass_data* data = user_data;
 	main_pass_create_pipeline( device, data );
 	main_pass_create_buffers( device, data );
+	main_pass_create_sampler( device, data );
 	main_pass_load_scene( device, data );
 	main_pass_create_descriptor_sets( device, data );
 	main_pass_write_descriptors( device, data );
@@ -516,6 +606,11 @@ main_pass_execute( const struct ft_device*   device,
 		}
 		}
 
+		ft_cmd_bind_descriptor_set( cmd,
+		                            1,
+		                            draw->material_set,
+		                            data->pipeline );
+
 		ft_cmd_bind_index_buffer( cmd, index_buffer, 0, draw->index_type );
 
 		ft_cmd_draw_indexed( cmd,
@@ -534,6 +629,20 @@ main_pass_destroy( const struct ft_device* device, void* user_data )
 {
 	struct main_pass_data* data = user_data;
 	ft_destroy_descriptor_set( device, data->set );
+	for ( uint32_t i = 0; i < data->draw_count; i++ )
+	{
+		if ( data->draws[ i ].material_set )
+		{
+			ft_destroy_descriptor_set( device, data->draws[ i ].material_set );
+		}
+	}
+
+	for ( uint32_t i = 0; i < data->model.texture_count; i++ )
+	{
+		ft_destroy_image( device, data->model_images[ i ] );
+	}
+	ft_safe_free( data->model_images );
+	ft_destroy_sampler( device, data->sampler );
 	ft_free_gltf( &data->model );
 	ft_destroy_buffer( device, data->transforms_buffer );
 	ft_destroy_buffer( device, data->ubo_buffer );

@@ -19,17 +19,20 @@ pc;
 
 layout (location = 0) in vec3 in_position;
 layout (location = 1) in vec3 in_normal;
-layout (location = 2) in vec3 in_texcoord;
+layout (location = 2) in vec2 in_texcoord;
 
 layout (location = 0) out vec3 out_normal;
-layout (location = 1) out vec3 out_frag_pos;
+layout (location = 1) out vec2 out_tex_coord;
+layout (location = 2) out vec3 out_frag_pos;
 
 void
 main()
 {
 	mat4 transform = transforms.transforms[ pc.instance_id ];
 	out_normal     = mat3( transform ) * in_normal;
+	out_tex_coord  = in_texcoord;
 	out_frag_pos   = ( transform * vec4( in_position, 1.0 ) ).xyz;
+
 	gl_Position =
 	    u.projection * u.view * transform * vec4( in_position, 1.0 );
 }
