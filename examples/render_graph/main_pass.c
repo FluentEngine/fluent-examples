@@ -303,91 +303,98 @@ main_pass_create( const struct ft_device* device, void* user_data )
 }
 
 static void
-apply_animation( float4x4*                  r,
+apply_animation_channel( float4x4                           r,
+                         float                              current_time,
+                         const struct ft_animation_channel* channel )
+{
+	float3 translation = { 0.0f, 0.0f, 0.0f };
+	quat   rotation    = { 0.0f, 0.0f, 0.0f, 0.0f };
+	float3 scale       = { 0.0f, 0.0f, 0.0f };
+
+	float4x4_decompose( translation, rotation, scale, r );
+
+	struct ft_animation_sampler* sampler = channel->sampler;
+
+	if ( sampler->frame_count < 2 )
+	{
+		return;
+	}
+
+	uint32_t previous_frame = 0;
+	uint32_t next_frame     = 0;
+
+	float interpolation_value = 0.0f;
+
+	for ( uint32_t f = 0; f < sampler->frame_count; f++ )
+	{
+		if ( sampler->times[ f ] >= current_time )
+		{
+			next_frame = f;
+			break;
+		}
+	}
+
+	if ( next_frame == 0 )
+	{
+		previous_frame = 0;
+	}
+	else
+	{
+		previous_frame = next_frame - 1;
+		interpolation_value =
+		    ( current_time - sampler->times[ previous_frame ] ) /
+		    ( sampler->times[ next_frame ] - sampler->times[ previous_frame ] );
+	}
+
+	switch ( channel->transform_type )
+	{
+	case FT_TRANSFORM_TYPE_TRANSLATION:
+	{
+		float3* translations = ( float3* ) sampler->values;
+		float3_lerp( translation,
+		             translations[ previous_frame ],
+		             translations[ next_frame ],
+		             interpolation_value );
+		float4x4_compose( r, translation, rotation, scale );
+		break;
+	}
+	case FT_TRANSFORM_TYPE_ROTATION:
+	{
+		quat* quats = ( quat* ) sampler->values;
+		slerp( rotation,
+		       quats[ previous_frame ],
+		       quats[ next_frame ],
+		       interpolation_value );
+		float4x4_compose( r, translation, rotation, scale );
+		break;
+	}
+	case FT_TRANSFORM_TYPE_SCALE:
+	{
+		float3* scales = ( float3* ) sampler->values;
+		float3_lerp( scale,
+		             scales[ previous_frame ],
+		             scales[ next_frame ],
+		             interpolation_value );
+		break;
+	}
+	}
+}
+
+static void
+apply_animation( float4x4*                  transforms,
                  float                      current_time,
                  const struct ft_animation* animation )
 {
 	current_time = fmod( current_time, animation->duration );
 
-	float3 translation = { 0.0f, 0.0f, 0.0f };
-	quat   rotation    = { 0.0f, 0.0f, 0.0f, -1.0f };
-	float3 scale       = { 1.0f, 1.0f, 1.0f };
-
-	for ( uint32_t ch = 0; ch < animation->channel_count; ++ch )
+	// TODO: sort animation channels by transform type
+	for ( int32_t ch = animation->channel_count - 1; ch >= 0; ch-- )
 	{
 		struct ft_animation_channel* channel = &animation->channels[ ch ];
-		struct ft_animation_sampler* sampler = channel->sampler;
 
-		if ( sampler->frame_count < 2 )
-		{
-			continue;
-		}
-
-		uint32_t previous_frame = 0;
-		uint32_t next_frame     = 0;
-
-		float interpolation_value = 0.0f;
-
-		for ( uint32_t f = 0; f < sampler->frame_count; f++ )
-		{
-			if ( sampler->times[ f ] >= current_time )
-			{
-				next_frame = f;
-				break;
-			}
-		}
-
-		if ( next_frame == 0 )
-		{
-			previous_frame = 0;
-		}
-		else
-		{
-			previous_frame = next_frame - 1;
-			interpolation_value =
-			    ( current_time - sampler->times[ previous_frame ] ) /
-			    ( sampler->times[ next_frame ] -
-			      sampler->times[ previous_frame ] );
-		}
-
-		switch ( channel->transform_type )
-		{
-		case FT_TRANSFORM_TYPE_TRANSLATION:
-		{
-			float3* translations = ( float3* ) sampler->values;
-			float3_lerp( translation,
-			             translations[ previous_frame ],
-			             translations[ next_frame ],
-			             interpolation_value );
-			float4x4_compose( r[ channel->target ],
-			                  translation,
-			                  rotation,
-			                  scale );
-			break;
-		}
-		case FT_TRANSFORM_TYPE_ROTATION:
-		{
-			quat* quats = ( quat* ) sampler->values;
-			slerp( rotation,
-			       quats[ previous_frame ],
-			       quats[ next_frame ],
-			       interpolation_value );
-			float4x4_compose( r[ channel->target ],
-			                  translation,
-			                  rotation,
-			                  scale );
-			break;
-		}
-		case FT_TRANSFORM_TYPE_SCALE:
-		{
-			float3* scales = ( float3* ) sampler->values;
-			float3_lerp( scale,
-			             scales[ previous_frame ],
-			             scales[ next_frame ],
-			             interpolation_value );
-			break;
-		}
-		}
+		apply_animation_channel( transforms[ channel->target ],
+		                         current_time,
+		                         channel );
 	}
 }
 
@@ -448,26 +455,26 @@ main_pass_execute( const struct ft_device*   device,
 	ft_cmd_bind_vertex_buffer( cmd, data->vertex_buffer, 0 );
 	ft_cmd_bind_index_buffer( cmd, data->index_buffer, 0, FT_INDEX_TYPE_U16 );
 
+	float4x4* transforms = ft_map_memory( device, data->transforms_buffer );
+
+	for ( uint32_t i = 0; i < data->draw_count; ++i )
+	{
+		float4x4_dup( transforms[ i ], data->model.meshes[ i ].world );
+	}
+
+	for ( uint32_t a = 0; a < data->model.animation_count; ++a )
+	{
+		struct ft_animation* animation    = &data->model.animations[ a ];
+		float                current_time = ft_timer_get_ticks( &data->timer );
+		current_time /= 1000.0f;
+		apply_animation( transforms, current_time, animation );
+	}
+
+	ft_unmap_memory( device, data->transforms_buffer );
+
 	for ( uint32_t i = 0; i < data->draw_count; ++i )
 	{
 		struct draw_data* draw = &data->draws[ i ];
-
-		float4x4* transforms = ft_map_memory( device, data->transforms_buffer );
-		float4x4_dup( transforms[ i ], data->model.meshes[ i ].world );
-
-		for ( uint32_t a = 0; a < data->model.animation_count; ++a )
-		{
-			if ( i == 1 )
-			{
-				apply_animation(
-				    transforms,
-				    ( ( float ) ( ft_timer_get_ticks( &data->timer ) ) ) /
-				        1000.0f,
-				    &data->model.animations[ a ] );
-			}
-		}
-
-		ft_unmap_memory( device, data->transforms_buffer );
 
 		ft_cmd_push_constants( cmd, data->pipeline, 0, sizeof( uint32_t ), &i );
 		ft_cmd_draw_indexed( cmd,
