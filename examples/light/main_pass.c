@@ -4,7 +4,7 @@
 #include "main.frag.h"
 #include "main_pass.h"
 
-#define MODEL_PATH         MODEL_FOLDER /*"/BoxAnimated/glTF/BoxAnimated.gltf"*/ "/Sponza/glTF/Sponza.gltf"
+#define MODEL_PATH         MODEL_FOLDER "/DamagedHelmet/glTF/DamagedHelmet.gltf"
 #define VERTEX_BUFFER_SIZE 20 * 1024 * 1024 * 8
 #define INDEX_BUFFER_SIZE  20 * 1024 * 1024 * 8
 #define MAX_DRAW_COUNT     200
@@ -21,13 +21,14 @@ struct shader_data
 {
 	float4x4 projection;
 	float4x4 view;
+	float4   view_pos;
 };
 
 struct push_constant
 {
 	uint32_t instance_id;
 	int32_t  textures[ FT_TEXTURE_TYPE_COUNT ];
-	int32_t  pad[ 1 ];
+	int32_t  pad[ 2 ];
 	float4   base_color_factor;
 };
 
@@ -51,8 +52,7 @@ struct main_pass_data
 	struct ft_descriptor_set_layout* dsl;
 	struct ft_pipeline*              pipeline;
 	struct ft_buffer*                vertex_buffer;
-	struct ft_buffer*                index_buffer_u16;
-	struct ft_buffer*                index_buffer_u32;
+	struct ft_buffer*                index_buffer;
 	struct ft_buffer*                ubo_buffer;
 	struct ft_buffer*                transforms_buffer;
 	struct ft_descriptor_set*        set;
@@ -151,9 +151,7 @@ main_pass_create_buffers( const struct ft_device* device,
 	ft_create_buffer( device, &info, &data->vertex_buffer );
 	info.descriptor_type = FT_DESCRIPTOR_TYPE_INDEX_BUFFER;
 	info.size            = INDEX_BUFFER_SIZE;
-	ft_create_buffer( device, &info, &data->index_buffer_u16 );
-	info.size = INDEX_BUFFER_SIZE * 2;
-	ft_create_buffer( device, &info, &data->index_buffer_u32 );
+	ft_create_buffer( device, &info, &data->index_buffer );
 	info.descriptor_type = FT_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	info.memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU;
 	info.size            = sizeof( struct shader_data );
@@ -212,7 +210,7 @@ FT_INLINE void
 main_pass_load_scene( const struct ft_device* device,
                       struct main_pass_data*  data )
 {
-	data->model = ft_load_gltf( MODEL_PATH );
+	data->model = ft_load_gltf( MODEL_PATH, FT_MODEL_GENERATE_TANGENTS );
 
 	data->draw_count = data->model.mesh_count;
 
@@ -234,7 +232,7 @@ main_pass_load_scene( const struct ft_device* device,
 		    .width           = texture->width,
 		    .height          = texture->height,
 		    .depth           = 1,
-		    .format          = FT_FORMAT_R8G8B8A8_SRGB,
+		    .format          = FT_FORMAT_R8G8B8A8_UNORM,
 		    .sample_count    = 1,
 		    .layer_count     = 1,
 		    .mip_levels      = 1,
@@ -253,22 +251,7 @@ main_pass_load_scene( const struct ft_device* device,
 	for ( uint32_t m = 0; m < data->draw_count; ++m )
 	{
 		const struct ft_mesh* mesh = &data->model.meshes[ m ];
-
-		struct ft_buffer* index_buffer;
-		size_t            index_size = 0;
-
-		if ( mesh->is_32bit_indices )
-		{
-			index_buffer                = data->index_buffer_u32;
-			data->draws[ m ].index_type = FT_INDEX_TYPE_U32;
-			index_size                  = sizeof( uint32_t );
-		}
-		else
-		{
-			index_buffer                = data->index_buffer_u16;
-			data->draws[ m ].index_type = FT_INDEX_TYPE_U16;
-			index_size                  = sizeof( uint16_t );
-		}
+		struct push_constant* pc   = &data->draws[ m ].push_constant;
 
 		data->draws[ m ].index_count  = mesh->index_count;
 		data->draws[ m ].first_vertex = first_vertex;
@@ -310,9 +293,9 @@ main_pass_load_scene( const struct ft_device* device,
 		                  first_vertex * sizeof( struct vertex ),
 		                  sizeof( struct vertex ) * mesh->vertex_count,
 		                  vertices );
-		ft_upload_buffer( index_buffer,
-		                  first_index * index_size,
-		                  mesh->index_count * index_size,
+		ft_upload_buffer( data->index_buffer,
+		                  first_index * sizeof( uint16_t ),
+		                  mesh->index_count * sizeof( uint16_t ),
 		                  mesh->indices );
 
 		first_index += mesh->index_count;
@@ -320,7 +303,6 @@ main_pass_load_scene( const struct ft_device* device,
 
 		free( vertices );
 
-		struct push_constant* pc = &data->draws[ m ].push_constant;
 		pc->instance_id = m;
 
 		struct ft_descriptor_set_info set_info = {
@@ -345,13 +327,13 @@ main_pass_load_scene( const struct ft_device* device,
 			{
 				image_descriptors[ i ].image =
 				    data->model_images[ mesh->material.textures[ i ] ];
+				pc->textures[ i ] = i;
 			}
 			else
 			{
 				image_descriptors[ i ].image = data->unbound_image;
+				pc->textures[ i ]            = -1;
 			}
-
-			pc->textures[ i ] = i;
 		}
 
 		float4_dup( pc->base_color_factor, mesh->material.base_color_factor );
@@ -428,6 +410,7 @@ main_pass_update_ubo( const struct ft_device* device,
 {
 	float4x4_dup( data->shader_data.view, data->camera->view );
 	float4x4_dup( data->shader_data.projection, data->camera->projection );
+	float3_dup( data->shader_data.view_pos, data->camera->position );
 
 	uint8_t* dst = ft_map_memory( device, data->ubo_buffer );
 	memcpy( dst, &data->shader_data, sizeof( struct shader_data ) );
@@ -448,102 +431,6 @@ main_pass_create( const struct ft_device* device, void* user_data )
 }
 
 static void
-apply_animation_channel( float4x4                           r,
-                         float                              current_time,
-                         const struct ft_animation_channel* channel )
-{
-	float3 translation;
-	quat   rotation;
-	float3 scale;
-
-	float4x4_decompose( translation, rotation, scale, r );
-
-	struct ft_animation_sampler* sampler = channel->sampler;
-
-	if ( sampler->frame_count < 2 )
-	{
-		return;
-	}
-
-	uint32_t previous_frame = 0;
-	uint32_t next_frame     = 0;
-
-	float interpolation_value = 0.0f;
-
-	for ( uint32_t f = 0; f < sampler->frame_count; f++ )
-	{
-		if ( sampler->times[ f ] >= current_time )
-		{
-			next_frame = f;
-			break;
-		}
-	}
-
-	if ( next_frame == 0 )
-	{
-		previous_frame = 0;
-	}
-	else
-	{
-		previous_frame = next_frame - 1;
-		interpolation_value =
-		    ( current_time - sampler->times[ previous_frame ] ) /
-		    ( sampler->times[ next_frame ] - sampler->times[ previous_frame ] );
-	}
-
-	switch ( channel->transform_type )
-	{
-	case FT_TRANSFORM_TYPE_TRANSLATION:
-	{
-		float3* translations = ( float3* ) sampler->values;
-		float3_lerp( translation,
-		             translations[ previous_frame ],
-		             translations[ next_frame ],
-		             interpolation_value );
-		float4x4_compose( r, translation, rotation, scale );
-		break;
-	}
-	case FT_TRANSFORM_TYPE_ROTATION:
-	{
-		quat* quats = ( quat* ) sampler->values;
-		slerp( rotation,
-		       quats[ previous_frame ],
-		       quats[ next_frame ],
-		       interpolation_value );
-		float4x4_compose( r, translation, rotation, scale );
-		break;
-	}
-	case FT_TRANSFORM_TYPE_SCALE:
-	{
-		float3* scales = ( float3* ) sampler->values;
-		float3_lerp( scale,
-		             scales[ previous_frame ],
-		             scales[ next_frame ],
-		             interpolation_value );
-		break;
-	}
-	}
-}
-
-static void
-apply_animation( float4x4*                  transforms,
-                 float                      current_time,
-                 const struct ft_animation* animation )
-{
-	current_time = fmod( current_time, animation->duration );
-
-	// TODO: animation channels should be applied in correct order
-	for ( int32_t ch = animation->channel_count - 1; ch >= 0; ch-- )
-	{
-		struct ft_animation_channel* channel = &animation->channels[ ch ];
-
-		apply_animation_channel( transforms[ channel->target ],
-		                         current_time,
-		                         channel );
-	}
-}
-
-static void
 main_pass_execute( const struct ft_device*   device,
                    struct ft_command_buffer* cmd,
                    void*                     user_data )
@@ -558,6 +445,7 @@ main_pass_execute( const struct ft_device*   device,
 	ft_cmd_bind_pipeline( cmd, data->pipeline );
 	ft_cmd_bind_descriptor_set( cmd, 0, data->set, data->pipeline );
 	ft_cmd_bind_vertex_buffer( cmd, data->vertex_buffer, 0 );
+	ft_cmd_bind_index_buffer( cmd, data->index_buffer, 0, FT_INDEX_TYPE_U16 );
 
 	float4x4* transforms = ft_map_memory( device, data->transforms_buffer );
 
@@ -586,28 +474,10 @@ main_pass_execute( const struct ft_device*   device,
 		                       sizeof( struct push_constant ),
 		                       &draw->push_constant );
 
-		struct ft_buffer* index_buffer;
-
-		switch ( draw->index_type )
-		{
-		case FT_INDEX_TYPE_U16:
-		{
-			index_buffer = data->index_buffer_u16;
-			break;
-		}
-		case FT_INDEX_TYPE_U32:
-		{
-			index_buffer = data->index_buffer_u32;
-			break;
-		}
-		}
-
 		ft_cmd_bind_descriptor_set( cmd,
 		                            1,
 		                            draw->material_set,
 		                            data->pipeline );
-
-		ft_cmd_bind_index_buffer( cmd, index_buffer, 0, draw->index_type );
 
 		ft_cmd_draw_indexed( cmd,
 		                     draw->index_count,
@@ -641,8 +511,7 @@ main_pass_destroy( const struct ft_device* device, void* user_data )
 	ft_free_gltf( &data->model );
 	ft_destroy_buffer( device, data->transforms_buffer );
 	ft_destroy_buffer( device, data->ubo_buffer );
-	ft_destroy_buffer( device, data->index_buffer_u32 );
-	ft_destroy_buffer( device, data->index_buffer_u16 );
+	ft_destroy_buffer( device, data->index_buffer );
 	ft_destroy_buffer( device, data->vertex_buffer );
 	ft_destroy_pipeline( device, data->pipeline );
 	ft_destroy_descriptor_set_layout( device, data->dsl );
