@@ -17,13 +17,6 @@ transforms;
 layout( push_constant ) uniform constants
 {
 	uint instance_id; // DirectX12 compatibility
-	int  base_color_texture;
-	int  normal_texture;
-	int  ambient_occlusion_texture;
-	int  metal_rougness_texture;
-	int  emissive_texture;
-	int  pad[ 2 ];
-	vec4 base_color_factor;
 }
 pc;
 

@@ -17,20 +17,26 @@ struct vertex
 	float2 texcoord;
 };
 
-struct shader_data
+struct camera_shader_data
 {
 	float4x4 projection;
 	float4x4 view;
 	float4   view_pos;
 };
 
-struct push_constant
+struct material_shader_data
 {
-	uint32_t instance_id;
-	int32_t  textures[ FT_TEXTURE_TYPE_COUNT ];
-	int32_t  pad[ 2 ];
-	float4   base_color_factor;
+	float4  base_color_factor;
+	float4  emissive_factor;
+	float   metallic_factor;
+	float   roughness_factor;
+	float   emissive_strength;
+	float   alpha_cutoff;
+	int32_t textures[ FT_TEXTURE_TYPE_COUNT ];
+	int32_t pad[ 3 ];
 };
+
+FT_STATIC_ASSERT( sizeof( struct material_shader_data ) == 80 );
 
 struct draw_data
 {
@@ -39,7 +45,6 @@ struct draw_data
 	uint32_t                  index_count;
 	enum ft_index_type        index_type;
 	struct ft_descriptor_set* material_set;
-	struct push_constant      push_constant;
 };
 
 struct main_pass_data
@@ -55,17 +60,18 @@ struct main_pass_data
 	struct ft_buffer*                index_buffer;
 	struct ft_buffer*                ubo_buffer;
 	struct ft_buffer*                transforms_buffer;
+	struct ft_buffer*                materials_buffer;
 	struct ft_descriptor_set*        set;
 
 	struct ft_model model;
 
-	struct shader_data shader_data;
-	uint32_t           draw_count;
-	struct draw_data   draws[ MAX_DRAW_COUNT ];
-	uint32_t           model_image_count;
-	struct ft_sampler* sampler;
-	struct ft_image**  model_images;
-	struct ft_image*   unbound_image;
+	struct camera_shader_data shader_data;
+	uint32_t                  draw_count;
+	struct draw_data          draws[ MAX_DRAW_COUNT ];
+	uint32_t                  model_image_count;
+	struct ft_sampler*        sampler;
+	struct ft_image**         model_images;
+	struct ft_image*          unbound_image;
 
 	struct ft_timer timer;
 } main_pass_data;
@@ -154,11 +160,14 @@ main_pass_create_buffers( const struct ft_device* device,
 	ft_create_buffer( device, &info, &data->index_buffer );
 	info.descriptor_type = FT_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	info.memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU;
-	info.size            = sizeof( struct shader_data );
+	info.size            = sizeof( struct camera_shader_data );
 	ft_create_buffer( device, &info, &data->ubo_buffer );
 	info.descriptor_type = FT_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	info.size            = sizeof( float4x4 ) * MAX_DRAW_COUNT;
 	ft_create_buffer( device, &info, &data->transforms_buffer );
+	info.descriptor_type = FT_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	info.size = sizeof( struct material_shader_data ) * MAX_DRAW_COUNT;
+	ft_create_buffer( device, &info, &data->materials_buffer );
 }
 
 FT_INLINE void
@@ -173,12 +182,12 @@ main_pass_create_sampler( const struct ft_device* device,
 	    .address_mode_v    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
 	    .address_mode_w    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
 	    .mip_lod_bias      = 0,
-	    .anisotropy_enable = 0,
-	    .max_anisotropy    = 16,
+	    .anisotropy_enable = 1,
+	    .max_anisotropy    = 8.0f,
 	    .compare_enable    = 0,
 	    .compare_op        = FT_COMPARE_OP_ALWAYS,
 	    .min_lod           = 0,
-	    .max_lod           = 16,
+	    .max_lod           = 20,
 	};
 
 	ft_create_sampler( device, &info, &data->sampler );
@@ -203,7 +212,14 @@ main_pass_create_unbound_resources( const struct ft_device* device,
 	};
 
 	ft_create_image( device, &info, &data->unbound_image );
-	ft_upload_image( data->unbound_image, sizeof( image_data ), image_data );
+
+	struct ft_upload_image_info upload_info = {
+	    .size      = sizeof( image_data ),
+	    .data      = image_data,
+	    .mip_level = 0,
+	};
+
+	ft_upload_image( data->unbound_image, &upload_info );
 }
 
 FT_INLINE void
@@ -241,9 +257,13 @@ main_pass_load_scene( const struct ft_device* device,
 
 		ft_create_image( device, &image_info, &data->model_images[ t ] );
 
-		ft_upload_image( data->model_images[ t ],
-		                 texture->width * texture->height * 4,
-		                 texture->data );
+		struct ft_upload_image_info upload_info = {
+		    .size      = texture->width * texture->height * 4,
+		    .data      = texture->data,
+		    .mip_level = 0,
+		};
+
+		ft_upload_image( data->model_images[ t ], &upload_info );
 	}
 
 	ft_begin_upload_batch();
@@ -251,7 +271,6 @@ main_pass_load_scene( const struct ft_device* device,
 	for ( uint32_t m = 0; m < data->draw_count; ++m )
 	{
 		const struct ft_mesh* mesh = &data->model.meshes[ m ];
-		struct push_constant* pc   = &data->draws[ m ].push_constant;
 
 		data->draws[ m ].index_count  = mesh->index_count;
 		data->draws[ m ].first_vertex = first_vertex;
@@ -302,8 +321,17 @@ main_pass_load_scene( const struct ft_device* device,
 		first_vertex += mesh->vertex_count;
 
 		free( vertices );
+	}
 
-		pc->instance_id = m;
+	ft_end_upload_batch();
+
+	struct material_shader_data* materials =
+	    ft_map_memory( device, data->materials_buffer );
+
+	for ( uint32_t m = 0; m < data->draw_count; ++m )
+	{
+		const struct ft_mesh*        mesh = &data->model.meshes[ m ];
+		struct material_shader_data* mat  = &materials[ m ];
 
 		struct ft_descriptor_set_info set_info = {
 		    .set                   = 1,
@@ -327,16 +355,21 @@ main_pass_load_scene( const struct ft_device* device,
 			{
 				image_descriptors[ i ].image =
 				    data->model_images[ mesh->material.textures[ i ] ];
-				pc->textures[ i ] = i;
+				mat->textures[ i ] = i;
 			}
 			else
 			{
 				image_descriptors[ i ].image = data->unbound_image;
-				pc->textures[ i ]            = -1;
+				mat->textures[ i ]           = -1;
 			}
 		}
 
-		float4_dup( pc->base_color_factor, mesh->material.base_color_factor );
+		float4_dup( mat->base_color_factor, mesh->material.base_color_factor );
+		float3_dup( mat->emissive_factor, mesh->material.emissive_factor );
+		mat->metallic_factor   = mesh->material.metallic_factor;
+		mat->roughness_factor  = mesh->material.roughness_factor;
+		mat->emissive_strength = mesh->material.emissive_strength;
+		mat->alpha_cutoff      = mesh->material.alpha_cutoff;
 
 		struct ft_descriptor_write descriptor_writes[ 2 ];
 		memset( descriptor_writes, 0, sizeof( descriptor_writes ) );
@@ -351,8 +384,7 @@ main_pass_load_scene( const struct ft_device* device,
 
 		data->draws[ m ].material_set = set;
 	}
-
-	ft_end_upload_batch();
+	ft_unmap_memory( device, data->materials_buffer );
 }
 
 FT_INLINE void
@@ -374,7 +406,7 @@ main_pass_write_descriptors( const struct ft_device* device,
 	struct ft_buffer_descriptor buffer_descriptor = {
 	    .buffer = data->ubo_buffer,
 	    .offset = 0,
-	    .range  = sizeof( struct shader_data ),
+	    .range  = sizeof( struct camera_shader_data ),
 	};
 
 	struct ft_buffer_descriptor tbuffer_descriptor = {
@@ -383,7 +415,13 @@ main_pass_write_descriptors( const struct ft_device* device,
 	    .range  = MAX_DRAW_COUNT * sizeof( float4x4 ),
 	};
 
-	struct ft_descriptor_write descriptor_writes[ 2 ] = {
+	struct ft_buffer_descriptor mbuffer_descriptor = {
+	    .buffer = data->materials_buffer,
+	    .offset = 0,
+	    .range  = MAX_DRAW_COUNT * sizeof( struct material_shader_data ),
+	};
+
+	struct ft_descriptor_write descriptor_writes[ 3 ] = {
 	    [0] =
 	        {
 	            .buffer_descriptors  = &buffer_descriptor,
@@ -400,8 +438,16 @@ main_pass_write_descriptors( const struct ft_device* device,
 	            .buffer_descriptors  = &tbuffer_descriptor,
 	            .sampler_descriptors = NULL,
 	        },
+	    [2] =
+	        {
+	            .buffer_descriptors  = NULL,
+	            .descriptor_count    = 1,
+	            .descriptor_name     = "u_materials",
+	            .buffer_descriptors  = &mbuffer_descriptor,
+	            .sampler_descriptors = NULL,
+	        },
 	};
-	ft_update_descriptor_set( device, data->set, 2, descriptor_writes );
+	ft_update_descriptor_set( device, data->set, 3, descriptor_writes );
 }
 
 FT_INLINE void
@@ -413,7 +459,7 @@ main_pass_update_ubo( const struct ft_device* device,
 	float3_dup( data->shader_data.view_pos, data->camera->position );
 
 	uint8_t* dst = ft_map_memory( device, data->ubo_buffer );
-	memcpy( dst, &data->shader_data, sizeof( struct shader_data ) );
+	memcpy( dst, &data->shader_data, sizeof( struct camera_shader_data ) );
 	ft_unmap_memory( device, data->ubo_buffer );
 }
 
@@ -468,11 +514,7 @@ main_pass_execute( const struct ft_device*   device,
 	{
 		struct draw_data* draw = &data->draws[ i ];
 
-		ft_cmd_push_constants( cmd,
-		                       data->pipeline,
-		                       0,
-		                       sizeof( struct push_constant ),
-		                       &draw->push_constant );
+		ft_cmd_push_constants( cmd, data->pipeline, 0, sizeof( uint32_t ), &i );
 
 		ft_cmd_bind_descriptor_set( cmd,
 		                            1,
@@ -509,6 +551,7 @@ main_pass_destroy( const struct ft_device* device, void* user_data )
 	ft_destroy_image( device, data->unbound_image );
 	ft_destroy_sampler( device, data->sampler );
 	ft_free_gltf( &data->model );
+	ft_destroy_buffer( device, data->materials_buffer );
 	ft_destroy_buffer( device, data->transforms_buffer );
 	ft_destroy_buffer( device, data->ubo_buffer );
 	ft_destroy_buffer( device, data->index_buffer );
