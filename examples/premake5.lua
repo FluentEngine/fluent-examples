@@ -14,30 +14,30 @@ project(name)
 		optimize "Speed"
         defines { "NDEBUG" }
 	filter {}
-	
+
 	defines { "MODEL_FOLDER=" .. '"' .. path.getabsolute("../../glTF-Sample-Models/2.0/") .. '"' }
 
-	includedirs 
+	includedirs
 	{
         "../deps/fluent/sources",
 	}
-	
-	sysincludedirs 
+
+	sysincludedirs
 	{
         "../deps/fluent/sources/third_party/",
     }
-    
-	links 
-	{ 
-        "ft_renderer", 
-        "ft_os", 
+
+	links
+	{
+        "ft_renderer",
+        "ft_os",
         "ft_log"
     }
 
     fluent_engine.link()
 
     filter { "system:linux" }
-        links 
+        links
         {
             "m"
         }
@@ -46,37 +46,16 @@ project(name)
     filter { }
 end
 
-commons.compile_shaders = function(ex)
-    filter 'files:**.ft'
-        buildmessage 'Compiling shader %{file.relpath}'
-
-        prebuildcommands 
-        {
-            'python3 ' .. path.getabsolute('../tools/compile_shaders.py') .. ' --input ' .. '%{file.relpath} --output ' .. path.getabsolute(ex ..'/%{file.basename}.h') .. ' --bytecodes spirv'
-        }
-
-        buildcommands 
-        {
-            'python3 ' .. path.getabsolute('../tools/compile_shaders.py') .. ' --input ' .. '%{file.relpath} --output ' .. path.getabsolute(ex ..'/%{file.basename}.h') .. ' --bytecodes spirv'
-        }
-
-        buildoutputs 
-        { 
-			path.getabsolute(ex .."/%{file.basename}.h")
-		}
-	filter {}
-end
-
-commons.example("render_graph")
-	files 
+commons.example("light")
+	files
 	{
-		"render_graph/main.c",
-		"render_graph/main_pass.h",
-		"render_graph/main_pass.c",
-		"render_graph/shader_main_vert_spirv.c",
-		"render_graph/shader_main_frag_spirv.c",
+		"common/ui_pass.h",
+		"common/ui_pass.c",
+		"common/entry_point.h",
 
-		"render_graph/main.vert.ft",
-		"render_graph/main.frag.ft",
+		"light/main.c",
+		"light/main_pass.h",
+		"light/main_pass.c",
+		"light/shader_main_vert_spirv.c",
+		"light/shader_main_frag_spirv.c",
 	}
-	

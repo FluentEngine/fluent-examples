@@ -8,5 +8,4 @@ void
 register_main_pass( struct ft_render_graph*    graph,
                     const struct ft_swapchain* swapchain,
                     const char*                backbuffer_source_name,
-                    const struct ft_camera*    camera,
-                    struct nk_context*         ui );
+                    const struct ft_camera*    camera );

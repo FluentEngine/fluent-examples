@@ -4,7 +4,7 @@
 #include "main.frag.h"
 #include "main_pass.h"
 
-#define MODEL_PATH         MODEL_FOLDER "/Sponza/glTF/Sponza.gltf"
+#define MODEL_PATH         MODEL_FOLDER /*"/BoxAnimated/glTF/BoxAnimated.gltf"*/ "/Sponza/glTF/Sponza.gltf"
 #define VERTEX_BUFFER_SIZE 20 * 1024 * 1024 * 8
 #define INDEX_BUFFER_SIZE  20 * 1024 * 1024 * 8
 #define MAX_DRAW_COUNT     200
@@ -13,9 +13,22 @@ struct vertex
 {
 	float3 position;
 	float3 normal;
+	float3 tangent;
 	float2 texcoord;
-	float4 joints;
-	float4 weights;
+};
+
+struct shader_data
+{
+	float4x4 projection;
+	float4x4 view;
+};
+
+struct push_constant
+{
+	uint32_t instance_id;
+	int32_t  textures[ FT_TEXTURE_TYPE_COUNT ];
+	int32_t  pad[ 1 ];
+	float4   base_color_factor;
 };
 
 struct draw_data
@@ -25,12 +38,7 @@ struct draw_data
 	uint32_t                  index_count;
 	enum ft_index_type        index_type;
 	struct ft_descriptor_set* material_set;
-};
-
-struct shader_data
-{
-	float4x4 projection;
-	float4x4 view;
+	struct push_constant      push_constant;
 };
 
 struct main_pass_data
@@ -57,9 +65,9 @@ struct main_pass_data
 	uint32_t           model_image_count;
 	struct ft_sampler* sampler;
 	struct ft_image**  model_images;
+	struct ft_image*   unbound_image;
 
-	struct ft_timer    timer;
-	struct nk_context* ui;
+	struct ft_timer timer;
 } main_pass_data;
 
 FT_INLINE void
@@ -103,7 +111,7 @@ main_pass_create_pipeline( const struct ft_device* device,
 	            .binding_infos[ 0 ].binding    = 0,
 	            .binding_infos[ 0 ].input_rate = FT_VERTEX_INPUT_RATE_VERTEX,
 	            .binding_infos[ 0 ].stride     = sizeof( struct vertex ),
-	            .attribute_info_count          = 3,
+	            .attribute_info_count          = 4,
 	            .attribute_infos[ 0 ].binding  = 0,
 	            .attribute_infos[ 0 ].format   = FT_FORMAT_R32G32B32_SFLOAT,
 	            .attribute_infos[ 0 ].location = 0,
@@ -115,20 +123,15 @@ main_pass_create_pipeline( const struct ft_device* device,
 	            .attribute_infos[ 1 ].offset =
 	                offsetof( struct vertex, normal ),
 	            .attribute_infos[ 2 ].binding  = 0,
-	            .attribute_infos[ 2 ].format   = FT_FORMAT_R32G32_SFLOAT,
+	            .attribute_infos[ 2 ].format   = FT_FORMAT_R32G32B32_SFLOAT,
 	            .attribute_infos[ 2 ].location = 2,
 	            .attribute_infos[ 2 ].offset =
-	                offsetof( struct vertex, texcoord ),
+	                offsetof( struct vertex, tangent ),
 	            .attribute_infos[ 3 ].binding  = 0,
-	            .attribute_infos[ 3 ].format   = FT_FORMAT_R32G32B32A32_SFLOAT,
+	            .attribute_infos[ 3 ].format   = FT_FORMAT_R32G32_SFLOAT,
 	            .attribute_infos[ 3 ].location = 3,
 	            .attribute_infos[ 3 ].offset =
-	                offsetof( struct vertex, joints ),
-	            .attribute_infos[ 4 ].binding  = 0,
-	            .attribute_infos[ 4 ].format   = FT_FORMAT_R32G32B32A32_SFLOAT,
-	            .attribute_infos[ 4 ].location = 4,
-	            .attribute_infos[ 4 ].offset =
-	                offsetof( struct vertex, weights ),
+	                offsetof( struct vertex, texcoord ),
 	        },
 	};
 
@@ -181,6 +184,28 @@ main_pass_create_sampler( const struct ft_device* device,
 	};
 
 	ft_create_sampler( device, &info, &data->sampler );
+}
+
+FT_INLINE void
+main_pass_create_unbound_resources( const struct ft_device* device,
+                                    struct main_pass_data*  data )
+{
+	float4 image_data[ 4 ];
+	memset( image_data, 0, sizeof( image_data ) );
+
+	struct ft_image_info info = {
+	    .width           = 2,
+	    .height          = 2,
+	    .depth           = 1,
+	    .format          = FT_FORMAT_R8G8B8A8_SRGB,
+	    .sample_count    = 1,
+	    .layer_count     = 1,
+	    .mip_levels      = 1,
+	    .descriptor_type = FT_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+	};
+
+	ft_create_image( device, &info, &data->unbound_image );
+	ft_upload_image( data->unbound_image, sizeof( image_data ), image_data );
 }
 
 FT_INLINE void
@@ -264,25 +289,18 @@ main_pass_load_scene( const struct ft_device* device,
 				        3 * sizeof( float ) );
 			}
 
+			if ( mesh->tangents )
+			{
+				memcpy( vertices[ v ].tangent,
+				        &mesh->tangents[ v * 3 ],
+				        3 * sizeof( float ) );
+			}
+
 			if ( mesh->texcoords )
 			{
 				memcpy( vertices[ v ].texcoord,
 				        &mesh->texcoords[ v * 2 ],
 				        2 * sizeof( float ) );
-			}
-
-			if ( mesh->joints )
-			{
-				memcpy( vertices[ v ].joints,
-				        &mesh->joints[ v * 4 ],
-				        4 * sizeof( float ) );
-			}
-
-			if ( mesh->weights )
-			{
-				memcpy( vertices[ v ].weights,
-				        &mesh->joints[ v * 4 ],
-				        4 * sizeof( float ) );
 			}
 		}
 
@@ -302,41 +320,54 @@ main_pass_load_scene( const struct ft_device* device,
 
 		free( vertices );
 
-		if ( mesh->material.metallic_roughness.base_color_texture !=
-		     UINT32_MAX )
+		struct push_constant* pc = &data->draws[ m ].push_constant;
+		pc->instance_id = m;
+
+		struct ft_descriptor_set_info set_info = {
+		    .set                   = 1,
+		    .descriptor_set_layout = data->dsl,
+		};
+
+		struct ft_descriptor_set* set;
+		ft_create_descriptor_set( device, &set_info, &set );
+
+		struct ft_sampler_descriptor sampler_descriptor = {
+		    .sampler = data->sampler,
+		};
+
+		struct ft_image_descriptor image_descriptors[ FT_TEXTURE_TYPE_COUNT ];
+		memset( image_descriptors, 0, sizeof( image_descriptors ) );
+		for ( uint32_t i = 0; i < FT_TEXTURE_TYPE_COUNT; ++i )
 		{
-			struct ft_descriptor_set_info set_info = {
-			    .set                   = 1,
-			    .descriptor_set_layout = data->dsl,
-			};
-
-			struct ft_descriptor_set* set;
-			ft_create_descriptor_set( device, &set_info, &set );
-
-			struct ft_sampler_descriptor sampler_descriptor = {
-			    .sampler = data->sampler,
-			};
-
-			struct ft_image_descriptor image_descriptors[ 1 ];
-			image_descriptors[ 0 ].image =
-			    data->model_images[ mesh->material.metallic_roughness
-			                            .base_color_texture ];
-			image_descriptors[ 0 ].resource_state =
+			image_descriptors[ i ].resource_state =
 			    FT_RESOURCE_STATE_SHADER_READ_ONLY;
+			if ( mesh->material.textures[ i ] != -1 )
+			{
+				image_descriptors[ i ].image =
+				    data->model_images[ mesh->material.textures[ i ] ];
+			}
+			else
+			{
+				image_descriptors[ i ].image = data->unbound_image;
+			}
 
-			struct ft_descriptor_write descriptor_writes[ 2 ];
-			memset( descriptor_writes, 0, sizeof( descriptor_writes ) );
-			descriptor_writes[ 0 ].descriptor_count    = 1;
-			descriptor_writes[ 0 ].descriptor_name     = "u_sampler";
-			descriptor_writes[ 0 ].sampler_descriptors = &sampler_descriptor;
-			descriptor_writes[ 1 ].descriptor_count    = 1;
-			descriptor_writes[ 1 ].descriptor_name     = "u_textures";
-			descriptor_writes[ 1 ].image_descriptors   = image_descriptors;
-
-			ft_update_descriptor_set( device, set, 2, descriptor_writes );
-
-			data->draws[ m ].material_set = set;
+			pc->textures[ i ] = i;
 		}
+
+		float4_dup( pc->base_color_factor, mesh->material.base_color_factor );
+
+		struct ft_descriptor_write descriptor_writes[ 2 ];
+		memset( descriptor_writes, 0, sizeof( descriptor_writes ) );
+		descriptor_writes[ 0 ].descriptor_count    = 1;
+		descriptor_writes[ 0 ].descriptor_name     = "u_sampler";
+		descriptor_writes[ 0 ].sampler_descriptors = &sampler_descriptor;
+		descriptor_writes[ 1 ].descriptor_count    = FT_TEXTURE_TYPE_COUNT;
+		descriptor_writes[ 1 ].descriptor_name     = "u_textures";
+		descriptor_writes[ 1 ].image_descriptors   = image_descriptors;
+
+		ft_update_descriptor_set( device, set, 2, descriptor_writes );
+
+		data->draws[ m ].material_set = set;
 	}
 
 	ft_end_upload_batch();
@@ -410,6 +441,7 @@ main_pass_create( const struct ft_device* device, void* user_data )
 	main_pass_create_pipeline( device, data );
 	main_pass_create_buffers( device, data );
 	main_pass_create_sampler( device, data );
+	main_pass_create_unbound_resources( device, data );
 	main_pass_load_scene( device, data );
 	main_pass_create_descriptor_sets( device, data );
 	main_pass_write_descriptors( device, data );
@@ -420,9 +452,9 @@ apply_animation_channel( float4x4                           r,
                          float                              current_time,
                          const struct ft_animation_channel* channel )
 {
-	float3 translation = { 0.0f, 0.0f, 0.0f };
-	quat   rotation    = { 0.0f, 0.0f, 0.0f, 0.0f };
-	float3 scale       = { 0.0f, 0.0f, 0.0f };
+	float3 translation;
+	quat   rotation;
+	float3 scale;
 
 	float4x4_decompose( translation, rotation, scale, r );
 
@@ -500,7 +532,7 @@ apply_animation( float4x4*                  transforms,
 {
 	current_time = fmod( current_time, animation->duration );
 
-	// TODO: sort animation channels by transform type
+	// TODO: animation channels should be applied in correct order
 	for ( int32_t ch = animation->channel_count - 1; ch >= 0; ch-- )
 	{
 		struct ft_animation_channel* channel = &animation->channels[ ch ];
@@ -508,46 +540,6 @@ apply_animation( float4x4*                  transforms,
 		apply_animation_channel( transforms[ channel->target ],
 		                         current_time,
 		                         channel );
-	}
-}
-
-static void
-main_pass_draw_ui( struct ft_command_buffer* cmd, struct main_pass_data* data )
-{
-	static struct ft_timer fps_timer;
-	static bool            first_time = 1;
-	static uint64_t        frames     = 0;
-	static double          fps        = 0;
-
-	if ( first_time )
-	{
-		ft_timer_reset( &fps_timer );
-		first_time = 0;
-	}
-
-	nk_ft_new_frame();
-	if ( nk_begin( data->ui,
-	               "Debug Menu",
-	               nk_rect( 0, 0, 200, data->height ),
-	               NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR |
-	                   NK_WINDOW_NO_INPUT | NK_WINDOW_NOT_INTERACTIVE ) )
-	{
-		char fps_str[ 30 ];
-		sprintf( fps_str, "FPS: %.04f", fps );
-		nk_layout_row_static( data->ui, 20, 100, 1 );
-		nk_label( data->ui, fps_str, NK_TEXT_ALIGN_LEFT );
-	}
-	nk_end( data->ui );
-	nk_ft_render( cmd, NK_ANTI_ALIASING_OFF );
-
-	frames++;
-
-	if ( frames > 5 )
-	{
-		fps = frames /
-		      ( ( ( double ) ft_timer_get_ticks( &fps_timer ) ) / 1000.0f );
-		frames = 0;
-		ft_timer_reset( &fps_timer );
 	}
 }
 
@@ -588,7 +580,11 @@ main_pass_execute( const struct ft_device*   device,
 	{
 		struct draw_data* draw = &data->draws[ i ];
 
-		ft_cmd_push_constants( cmd, data->pipeline, 0, sizeof( uint32_t ), &i );
+		ft_cmd_push_constants( cmd,
+		                       data->pipeline,
+		                       0,
+		                       sizeof( struct push_constant ),
+		                       &draw->push_constant );
 
 		struct ft_buffer* index_buffer;
 
@@ -620,8 +616,6 @@ main_pass_execute( const struct ft_device*   device,
 		                     draw->first_vertex,
 		                     0 );
 	}
-
-	main_pass_draw_ui( cmd, data );
 }
 
 static void
@@ -642,6 +636,7 @@ main_pass_destroy( const struct ft_device* device, void* user_data )
 		ft_destroy_image( device, data->model_images[ i ] );
 	}
 	ft_safe_free( data->model_images );
+	ft_destroy_image( device, data->unbound_image );
 	ft_destroy_sampler( device, data->sampler );
 	ft_free_gltf( &data->model );
 	ft_destroy_buffer( device, data->transforms_buffer );
@@ -684,14 +679,12 @@ void
 register_main_pass( struct ft_render_graph*    graph,
                     const struct ft_swapchain* swapchain,
                     const char*                backbuffer_source_name,
-                    const struct ft_camera*    camera,
-                    struct nk_context*         ui )
+                    const struct ft_camera*    camera )
 {
 	main_pass_data.width            = swapchain->width;
 	main_pass_data.height           = swapchain->height;
 	main_pass_data.swapchain_format = swapchain->format;
 	main_pass_data.camera           = camera;
-	main_pass_data.ui               = ui;
 	ft_timer_reset( &main_pass_data.timer );
 
 	struct ft_render_pass* pass;

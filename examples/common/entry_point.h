@@ -1,7 +1,8 @@
 #include <fluent/os.h>
 #include <fluent/renderer.h>
 
-#include "main_pass.h"
+#include "../common/ui_pass.h"
+//#include "main_pass.h"
 
 #define FRAME_COUNT   2
 #define WINDOW_WIDTH  1400
@@ -69,13 +70,14 @@ on_init( void )
 	                  device,
 	                  graphics_queue,
 	                  swapchain->format,
-	                  FT_FORMAT_D32_SFLOAT );
+	                  FT_FORMAT_UNDEFINED );
 
 	nk_ft_font_stash_begin( &atlas );
 	nk_ft_font_stash_end();
 
 	ft_rg_create( device, &graph );
-	register_main_pass( graph, swapchain, "back", &camera, ctx );
+	register_main_pass( graph, swapchain, "back", &camera );
+	register_ui_pass( graph, swapchain, "back", ctx );
 	ft_rg_set_backbuffer_source( graph, "back" );
 	ft_rg_set_swapchain_dimensions( graph,
 	                                swapchain->width,
