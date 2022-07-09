@@ -68,8 +68,8 @@ struct main_pass_data
 	struct camera_shader_data shader_data;
 	uint32_t                  draw_count;
 	struct draw_data          draws[ MAX_DRAW_COUNT ];
-	uint32_t                  model_image_count;
 	struct ft_sampler*        sampler;
+	uint32_t                  model_image_count;
 	struct ft_image**         model_images;
 	struct ft_image*          unbound_image;
 
@@ -187,7 +187,7 @@ main_pass_create_sampler( const struct ft_device* device,
 	    .compare_enable    = 0,
 	    .compare_op        = FT_COMPARE_OP_ALWAYS,
 	    .min_lod           = 0,
-	    .max_lod           = 20,
+	    .max_lod           = 30,
 	};
 
 	ft_create_sampler( device, &info, &data->sampler );
@@ -214,8 +214,9 @@ main_pass_create_unbound_resources( const struct ft_device* device,
 	ft_create_image( device, &info, &data->unbound_image );
 
 	struct ft_upload_image_info upload_info = {
-	    .size      = sizeof( image_data ),
 	    .data      = image_data,
+	    .width     = info.width,
+	    .height    = info.height,
 	    .mip_level = 0,
 	};
 
@@ -223,16 +224,9 @@ main_pass_create_unbound_resources( const struct ft_device* device,
 }
 
 FT_INLINE void
-main_pass_load_scene( const struct ft_device* device,
-                      struct main_pass_data*  data )
+load_model_textures( const struct ft_device* device,
+                     struct main_pass_data*  data )
 {
-	data->model = ft_load_gltf( MODEL_PATH, FT_MODEL_GENERATE_TANGENTS );
-
-	data->draw_count = data->model.mesh_count;
-
-	uint32_t first_vertex = 0;
-	uint32_t first_index  = 0;
-
 	data->model_image_count = data->model.texture_count;
 	if ( data->model_image_count != 0 )
 	{
@@ -251,20 +245,47 @@ main_pass_load_scene( const struct ft_device* device,
 		    .format          = FT_FORMAT_R8G8B8A8_UNORM,
 		    .sample_count    = 1,
 		    .layer_count     = 1,
-		    .mip_levels      = 1,
+		    .mip_levels      = texture->mip_levels,
 		    .descriptor_type = FT_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
 		};
 
 		ft_create_image( device, &image_info, &data->model_images[ t ] );
 
-		struct ft_upload_image_info upload_info = {
-		    .size      = texture->width * texture->height * 4,
-		    .data      = texture->data,
-		    .mip_level = 0,
-		};
+		uint32_t                    width       = texture->width;
+		uint32_t                    height      = texture->height;
+		size_t                      offset      = 0;
+		uint8_t*                    image_data  = texture->data;
 
-		ft_upload_image( data->model_images[ t ], &upload_info );
+		for ( uint32_t i = 0; i < texture->mip_levels; ++i )
+		{
+			struct ft_upload_image_info upload_info = {
+			    .data      = image_data + offset,
+			    .width     = width,
+			    .height    = height,
+			    .mip_level = i,
+			};
+
+			ft_upload_image( data->model_images[ t ], &upload_info );
+
+			offset += width * height * 4;
+			width /= 2;
+			height /= 2;
+		}
 	}
+}
+
+FT_INLINE void
+main_pass_load_scene( const struct ft_device* device,
+                      struct main_pass_data*  data )
+{
+	data->model = ft_load_gltf( MODEL_PATH, FT_MODEL_GENERATE_TANGENTS );
+
+	data->draw_count = data->model.mesh_count;
+
+	uint32_t first_vertex = 0;
+	uint32_t first_index  = 0;
+
+	load_model_textures( device, data );
 
 	ft_begin_upload_batch();
 
