@@ -1,19 +1,21 @@
 #include <fluent/os.h>
 #include <fluent/renderer.h>
-#include "main.vert.h"
-#include "main.frag.h"
+#include "pbr.vert.h"
+#include "pbr.frag.h"
+#include "skybox.vert.h"
+#include "skybox.frag.h"
 #include "main_pass.h"
 
 #define MODEL_PATH         MODEL_FOLDER "/DamagedHelmet/glTF/DamagedHelmet.gltf"
-#define VERTEX_BUFFER_SIZE 20 * 1024 * 1024 * 8
-#define INDEX_BUFFER_SIZE  20 * 1024 * 1024 * 8
+#define VERTEX_BUFFER_SIZE 30 * 1024 * 1024 * 8
+#define INDEX_BUFFER_SIZE  30 * 1024 * 1024 * 8
 #define MAX_DRAW_COUNT     200
 
 struct vertex
 {
 	float3 position;
 	float3 normal;
-	float3 tangent;
+	float4 tangent;
 	float2 texcoord;
 };
 
@@ -55,13 +57,16 @@ struct main_pass_data
 	uint32_t                         height;
 	enum ft_format                   swapchain_format;
 	struct ft_descriptor_set_layout* dsl;
-	struct ft_pipeline*              pipeline;
+	struct ft_pipeline*              pbr_pipeline;
+	struct ft_descriptor_set_layout* skybox_dsl;
+	struct ft_pipeline*              skybox_pipeline;
 	struct ft_buffer*                vertex_buffer;
 	struct ft_buffer*                index_buffer;
 	struct ft_buffer*                ubo_buffer;
 	struct ft_buffer*                transforms_buffer;
 	struct ft_buffer*                materials_buffer;
-	struct ft_descriptor_set*        set;
+	struct ft_descriptor_set*        pbr_set;
+	struct ft_descriptor_set*        skybox_set;
 
 	struct ft_model model;
 
@@ -73,16 +78,18 @@ struct main_pass_data
 	struct ft_image**         model_images;
 	struct ft_image*          unbound_image;
 
+	struct pbr_maps* maps;
+
 	struct ft_timer timer;
 } main_pass_data;
 
 FT_INLINE void
-main_pass_create_pipeline( const struct ft_device* device,
-                           struct main_pass_data*  data )
+main_pass_create_pbr_pipeline( const struct ft_device* device,
+                               struct main_pass_data*  data )
 {
 	struct ft_shader_info shader_info = {
-	    .vertex   = get_main_vert_shader( device->api ),
-	    .fragment = get_main_frag_shader( device->api ),
+	    .vertex   = get_pbr_vert_shader( device->api ),
+	    .fragment = get_pbr_frag_shader( device->api ),
 	};
 
 	struct ft_shader* shader;
@@ -129,7 +136,7 @@ main_pass_create_pipeline( const struct ft_device* device,
 	            .attribute_infos[ 1 ].offset =
 	                offsetof( struct vertex, normal ),
 	            .attribute_infos[ 2 ].binding  = 0,
-	            .attribute_infos[ 2 ].format   = FT_FORMAT_R32G32B32_SFLOAT,
+	            .attribute_infos[ 2 ].format   = FT_FORMAT_R32G32B32A32_SFLOAT,
 	            .attribute_infos[ 2 ].location = 2,
 	            .attribute_infos[ 2 ].offset =
 	                offsetof( struct vertex, tangent ),
@@ -141,7 +148,49 @@ main_pass_create_pipeline( const struct ft_device* device,
 	        },
 	};
 
-	ft_create_pipeline( device, &info, &data->pipeline );
+	ft_create_pipeline( device, &info, &data->pbr_pipeline );
+
+	ft_destroy_shader( device, shader );
+}
+
+FT_INLINE void
+main_pass_create_skybox_pipeline( const struct ft_device* device,
+                                  struct main_pass_data*  data )
+{
+	struct ft_shader_info shader_info = {
+	    .vertex   = get_skybox_vert_shader( device->api ),
+	    .fragment = get_skybox_frag_shader( device->api ),
+	};
+
+	struct ft_shader* shader;
+	ft_create_shader( device, &shader_info, &shader );
+
+	ft_create_descriptor_set_layout( device, shader, &data->skybox_dsl );
+
+	struct ft_pipeline_info pipeline_info = {
+	    .type                  = FT_PIPELINE_TYPE_GRAPHICS,
+	    .shader                = shader,
+	    .descriptor_set_layout = data->skybox_dsl,
+	    .topology              = FT_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+	    .rasterizer_info =
+	        {
+	            .cull_mode    = FT_CULL_MODE_NONE,
+	            .front_face   = FT_FRONT_FACE_COUNTER_CLOCKWISE,
+	            .polygon_mode = FT_POLYGON_MODE_FILL,
+	        },
+	    .depth_state_info =
+	        {
+	            .compare_op  = FT_COMPARE_OP_LESS_OR_EQUAL,
+	            .depth_test  = 1,
+	            .depth_write = 1,
+	        },
+	    .sample_count                  = 1,
+	    .color_attachment_count        = 1,
+	    .color_attachment_formats[ 0 ] = data->swapchain_format,
+	    .depth_stencil_format          = FT_FORMAT_D32_SFLOAT,
+	};
+
+	ft_create_pipeline( device, &pipeline_info, &data->skybox_pipeline );
 
 	ft_destroy_shader( device, shader );
 }
@@ -183,11 +232,11 @@ main_pass_create_sampler( const struct ft_device* device,
 	    .address_mode_w    = FT_SAMPLER_ADDRESS_MODE_REPEAT,
 	    .mip_lod_bias      = 0,
 	    .anisotropy_enable = 1,
-	    .max_anisotropy    = 8.0f,
+	    .max_anisotropy    = 16.0f,
 	    .compare_enable    = 0,
 	    .compare_op        = FT_COMPARE_OP_ALWAYS,
 	    .min_lod           = 0,
-	    .max_lod           = 30,
+	    .max_lod           = 16,
 	};
 
 	ft_create_sampler( device, &info, &data->sampler );
@@ -204,7 +253,7 @@ main_pass_create_unbound_resources( const struct ft_device* device,
 	    .width           = 2,
 	    .height          = 2,
 	    .depth           = 1,
-	    .format          = FT_FORMAT_R8G8B8A8_SRGB,
+	    .format          = FT_FORMAT_R8G8B8A8_UNORM,
 	    .sample_count    = 1,
 	    .layer_count     = 1,
 	    .mip_levels      = 1,
@@ -239,38 +288,31 @@ load_model_textures( const struct ft_device* device,
 		struct ft_texture* texture = &data->model.textures[ t ];
 
 		struct ft_image_info image_info = {
-		    .width           = texture->width,
-		    .height          = texture->height,
-		    .depth           = 1,
-		    .format          = FT_FORMAT_R8G8B8A8_UNORM,
-		    .sample_count    = 1,
-		    .layer_count     = 1,
-		    .mip_levels      = texture->mip_levels,
+		    .width        = texture->width,
+		    .height       = texture->height,
+		    .depth        = 1,
+		    .format       = FT_FORMAT_R8G8B8A8_UNORM,
+		    .sample_count = 1,
+		    .layer_count  = 1,
+		    .mip_levels   = ( uint32_t ) ( floor( log2(
+                              FT_MAX( texture->width, texture->height ) ) ) ) +
+		                  1,
 		    .descriptor_type = FT_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
 		};
 
 		ft_create_image( device, &image_info, &data->model_images[ t ] );
 
-		uint32_t                    width       = texture->width;
-		uint32_t                    height      = texture->height;
-		size_t                      offset      = 0;
-		uint8_t*                    image_data  = texture->data;
+		struct ft_upload_image_info upload_info = {
+		    .data      = texture->data,
+		    .width     = texture->width,
+		    .height    = texture->height,
+		    .mip_level = 0,
+		};
 
-		for ( uint32_t i = 0; i < texture->mip_levels; ++i )
-		{
-			struct ft_upload_image_info upload_info = {
-			    .data      = image_data + offset,
-			    .width     = width,
-			    .height    = height,
-			    .mip_level = i,
-			};
+		ft_upload_image( data->model_images[ t ], &upload_info );
 
-			ft_upload_image( data->model_images[ t ], &upload_info );
-
-			offset += width * height * 4;
-			width /= 2;
-			height /= 2;
-		}
+		ft_generate_mipmaps( data->model_images[ t ],
+		                     FT_RESOURCE_STATE_SHADER_READ_ONLY );
 	}
 }
 
@@ -301,29 +343,21 @@ main_pass_load_scene( const struct ft_device* device,
 
 		for ( uint32_t v = 0; v < mesh->vertex_count; ++v )
 		{
-			memcpy( vertices[ v ].position,
-			        &mesh->positions[ v * 3 ],
-			        3 * sizeof( float ) );
+			float3_dup( vertices[ v ].position, &mesh->positions[ v * 3 ] );
 
 			if ( mesh->normals )
 			{
-				memcpy( vertices[ v ].normal,
-				        &mesh->normals[ v * 3 ],
-				        3 * sizeof( float ) );
+				float3_dup( vertices[ v ].normal, &mesh->normals[ v * 3 ] );
 			}
 
 			if ( mesh->tangents )
 			{
-				memcpy( vertices[ v ].tangent,
-				        &mesh->tangents[ v * 3 ],
-				        3 * sizeof( float ) );
+				float4_dup( vertices[ v ].tangent, &mesh->tangents[ v * 4 ] );
 			}
 
 			if ( mesh->texcoords )
 			{
-				memcpy( vertices[ v ].texcoord,
-				        &mesh->texcoords[ v * 2 ],
-				        2 * sizeof( float ) );
+				float2_dup( vertices[ v ].texcoord, &mesh->texcoords[ v * 2 ] );
 			}
 		}
 
@@ -401,7 +435,10 @@ main_pass_load_scene( const struct ft_device* device,
 		descriptor_writes[ 1 ].descriptor_name     = "u_textures";
 		descriptor_writes[ 1 ].image_descriptors   = image_descriptors;
 
-		ft_update_descriptor_set( device, set, 2, descriptor_writes );
+		ft_update_descriptor_set( device,
+		                          set,
+		                          FT_ARRAY_SIZE( descriptor_writes ),
+		                          descriptor_writes );
 
 		data->draws[ m ].material_set = set;
 	}
@@ -417,7 +454,12 @@ main_pass_create_descriptor_sets( const struct ft_device* device,
 	    .set                   = 0,
 	};
 
-	ft_create_descriptor_set( device, &set_info, &data->set );
+	ft_create_descriptor_set( device, &set_info, &data->pbr_set );
+
+	set_info.descriptor_set_layout = data->skybox_dsl;
+	set_info.set                   = 0;
+
+	ft_create_descriptor_set( device, &set_info, &data->skybox_set );
 }
 
 FT_INLINE void
@@ -442,33 +484,99 @@ main_pass_write_descriptors( const struct ft_device* device,
 	    .range  = MAX_DRAW_COUNT * sizeof( struct material_shader_data ),
 	};
 
-	struct ft_descriptor_write descriptor_writes[ 3 ] = {
+	struct ft_image_descriptor brdf_lut_descriptor = {
+	    .image          = data->maps->brdf_lut,
+	    .resource_state = FT_RESOURCE_STATE_SHADER_READ_ONLY,
+	};
+
+	struct ft_image_descriptor irradiance_descriptor = {
+	    .image          = data->maps->irradiance,
+	    .resource_state = FT_RESOURCE_STATE_SHADER_READ_ONLY,
+	};
+
+	struct ft_image_descriptor specular_descriptor = {
+	    .image          = data->maps->specular,
+	    .resource_state = FT_RESOURCE_STATE_SHADER_READ_ONLY,
+	};
+
+	struct ft_descriptor_write descriptor_writes[ 6 ] = {
 	    [0] =
 	        {
-	            .buffer_descriptors  = &buffer_descriptor,
-	            .descriptor_count    = 1,
-	            .descriptor_name     = "ubo",
-	            .image_descriptors   = NULL,
-	            .sampler_descriptors = NULL,
+	            .buffer_descriptors = &buffer_descriptor,
+	            .descriptor_count   = 1,
+	            .descriptor_name    = "ubo",
 	        },
 	    [1] =
 	        {
-	            .buffer_descriptors  = NULL,
-	            .descriptor_count    = 1,
-	            .descriptor_name     = "u_transforms",
-	            .buffer_descriptors  = &tbuffer_descriptor,
-	            .sampler_descriptors = NULL,
+	            .descriptor_count   = 1,
+	            .descriptor_name    = "u_transforms",
+	            .buffer_descriptors = &tbuffer_descriptor,
 	        },
 	    [2] =
 	        {
-	            .buffer_descriptors  = NULL,
-	            .descriptor_count    = 1,
-	            .descriptor_name     = "u_materials",
-	            .buffer_descriptors  = &mbuffer_descriptor,
-	            .sampler_descriptors = NULL,
+	            .descriptor_count   = 1,
+	            .descriptor_name    = "u_materials",
+	            .buffer_descriptors = &mbuffer_descriptor,
+	        },
+	    [3] =
+	        {
+	            .descriptor_count  = 1,
+	            .descriptor_name   = "u_brdf_lut",
+	            .image_descriptors = &brdf_lut_descriptor,
+	        },
+	    [4] =
+	        {
+	            .descriptor_count  = 1,
+	            .descriptor_name   = "u_irradiance_map",
+	            .image_descriptors = &irradiance_descriptor,
+	        },
+	    [5] =
+	        {
+	            .descriptor_count  = 1,
+	            .descriptor_name   = "u_specular_map",
+	            .image_descriptors = &specular_descriptor,
 	        },
 	};
-	ft_update_descriptor_set( device, data->set, 3, descriptor_writes );
+
+	ft_update_descriptor_set( device,
+	                          data->pbr_set,
+	                          FT_ARRAY_SIZE( descriptor_writes ),
+	                          descriptor_writes );
+
+	struct ft_sampler_descriptor sampler_descriptor = {
+	    .sampler = data->sampler,
+	};
+
+	struct ft_image_descriptor image_descriptor = {
+	    .image          = data->maps->environment,
+	    .resource_state = FT_RESOURCE_STATE_SHADER_READ_ONLY,
+	};
+
+	struct ft_descriptor_write skybox_descriptor_writes[ 3 ] = {
+	    [0] =
+	        {
+	            .descriptor_count   = 1,
+	            .descriptor_name    = "ubo",
+	            .buffer_descriptors = &buffer_descriptor,
+	        },
+	    [1] =
+	        {
+	            .descriptor_count    = 1,
+	            .descriptor_name     = "u_sampler",
+	            .sampler_descriptors = &sampler_descriptor,
+	        },
+	    [2] =
+	        {
+	            .descriptor_count  = 1,
+	            .descriptor_name   = "u_environment_map",
+	            .image_descriptors = &image_descriptor,
+	        },
+	};
+
+	ft_update_descriptor_set( device,
+	                          data->skybox_set,
+	                          FT_ARRAY_SIZE( skybox_descriptor_writes ),
+	                          skybox_descriptor_writes );
 }
 
 FT_INLINE void
@@ -488,7 +596,8 @@ static void
 main_pass_create( const struct ft_device* device, void* user_data )
 {
 	struct main_pass_data* data = user_data;
-	main_pass_create_pipeline( device, data );
+	main_pass_create_pbr_pipeline( device, data );
+	main_pass_create_skybox_pipeline( device, data );
 	main_pass_create_buffers( device, data );
 	main_pass_create_sampler( device, data );
 	main_pass_create_unbound_resources( device, data );
@@ -509,8 +618,8 @@ main_pass_execute( const struct ft_device*   device,
 	ft_cmd_set_scissor( cmd, 0, 0, data->width, data->height );
 	ft_cmd_set_viewport( cmd, 0, 0, data->width, data->height, 0, 1.0f );
 
-	ft_cmd_bind_pipeline( cmd, data->pipeline );
-	ft_cmd_bind_descriptor_set( cmd, 0, data->set, data->pipeline );
+	ft_cmd_bind_pipeline( cmd, data->pbr_pipeline );
+	ft_cmd_bind_descriptor_set( cmd, 0, data->pbr_set, data->pbr_pipeline );
 	ft_cmd_bind_vertex_buffer( cmd, data->vertex_buffer, 0 );
 	ft_cmd_bind_index_buffer( cmd, data->index_buffer, 0, FT_INDEX_TYPE_U16 );
 
@@ -535,12 +644,16 @@ main_pass_execute( const struct ft_device*   device,
 	{
 		struct draw_data* draw = &data->draws[ i ];
 
-		ft_cmd_push_constants( cmd, data->pipeline, 0, sizeof( uint32_t ), &i );
+		ft_cmd_push_constants( cmd,
+		                       data->pbr_pipeline,
+		                       0,
+		                       sizeof( uint32_t ),
+		                       &i );
 
 		ft_cmd_bind_descriptor_set( cmd,
 		                            1,
 		                            draw->material_set,
-		                            data->pipeline );
+		                            data->pbr_pipeline );
 
 		ft_cmd_draw_indexed( cmd,
 		                     draw->index_count,
@@ -549,13 +662,22 @@ main_pass_execute( const struct ft_device*   device,
 		                     draw->first_vertex,
 		                     0 );
 	}
+
+	ft_cmd_bind_pipeline( cmd, data->skybox_pipeline );
+	ft_cmd_bind_descriptor_set( cmd,
+	                            0,
+	                            data->skybox_set,
+	                            data->skybox_pipeline );
+
+	ft_cmd_draw( cmd, 36, 1, 0, 0 );
 }
 
 static void
 main_pass_destroy( const struct ft_device* device, void* user_data )
 {
 	struct main_pass_data* data = user_data;
-	ft_destroy_descriptor_set( device, data->set );
+	ft_destroy_descriptor_set( device, data->skybox_set );
+	ft_destroy_descriptor_set( device, data->pbr_set );
 	for ( uint32_t i = 0; i < data->draw_count; i++ )
 	{
 		if ( data->draws[ i ].material_set )
@@ -577,8 +699,10 @@ main_pass_destroy( const struct ft_device* device, void* user_data )
 	ft_destroy_buffer( device, data->ubo_buffer );
 	ft_destroy_buffer( device, data->index_buffer );
 	ft_destroy_buffer( device, data->vertex_buffer );
-	ft_destroy_pipeline( device, data->pipeline );
+	ft_destroy_pipeline( device, data->pbr_pipeline );
+	ft_destroy_pipeline( device, data->skybox_pipeline );
 	ft_destroy_descriptor_set_layout( device, data->dsl );
+	ft_destroy_descriptor_set_layout( device, data->skybox_dsl );
 }
 
 static bool
@@ -612,12 +736,14 @@ void
 register_main_pass( struct ft_render_graph*    graph,
                     const struct ft_swapchain* swapchain,
                     const char*                backbuffer_source_name,
-                    const struct ft_camera*    camera )
+                    const struct ft_camera*    camera,
+                    struct pbr_maps*           maps )
 {
 	main_pass_data.width            = swapchain->width;
 	main_pass_data.height           = swapchain->height;
 	main_pass_data.swapchain_format = swapchain->format;
 	main_pass_data.camera           = camera;
+	main_pass_data.maps             = maps;
 	ft_timer_reset( &main_pass_data.timer );
 
 	struct ft_render_pass* pass;

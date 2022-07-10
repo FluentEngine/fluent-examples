@@ -22,7 +22,7 @@ pc;
 
 layout( location = 0 ) in vec3 in_position;
 layout( location = 1 ) in vec3 in_normal;
-layout( location = 2 ) in vec3 in_tangent;
+layout( location = 2 ) in vec4 in_tangent;
 layout( location = 3 ) in vec2 in_texcoord;
 
 layout( location = 0 ) out vec3 out_normal;
@@ -37,10 +37,10 @@ main()
 	mat4 transform     = transforms.transforms[ pc.instance_id ];
 	mat3 normal_matrix = mat3( transform );
 
-	vec3 T = normalize( vec3( transform * vec4( in_tangent, 0.0 ) ) );
+	vec3 T = normalize( vec3( transform * vec4( in_tangent.xyz, 0.0 ) ) );
 	vec3 N = normalize( vec3( transform * vec4( in_normal, 0.0 ) ) );
 	T      = normalize( T - dot( T, N ) * N );
-	vec3 B = cross( N, T );
+	vec3 B = cross( N, T ) * in_tangent.w;
 
 	out_tex_coord = in_texcoord;
 	out_normal    = N;

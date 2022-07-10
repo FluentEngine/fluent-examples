@@ -12,31 +12,31 @@ workspace "fluent-examples"
 		build_directory = _OPTIONS["build_directory"] .. "/"
 	end
 
-    targetdir (build_directory .. "/%{prj.name}")
-    objdir (build_directory .."/%{prj.name}")
-    location (build_directory)
-    configurations { "release", "debug" }
+	targetdir (build_directory .. "/%{prj.name}")
+	objdir (build_directory .."/%{prj.name}")
+	location (build_directory)
+	configurations { "release", "debug" }
 	
-    filter { "system:windows" }
-	    architecture "x64"
+	filter { "system:windows" }
+		architecture "x64"
 		staticruntime "On"
 		filter { }
 
-    root_directory = path.getabsolute(".")
+	root_directory = path.getabsolute(".")
 
-    -- TODO: make option
-    if (true)
-    then
-        git_url_prefix = "git@github.com:"
-    else
-        git_url_prefix = "https://github.com/"
-    end
+	-- TODO: make option
+	if (true)
+	then
+		git_url_prefix = "git@github.com:"
+	else
+		git_url_prefix = "https://github.com/"
+	end
 
-    if (not os.isdir(root_directory .. "/deps/fluent"))
-    then
-        fluent_engine_repo = git_url_prefix .. "FluentEngine/fluent.git " .. root_directory .. "/deps/fluent"
-        os.execute("git clone " .. fluent_engine_repo )
-    end
+	if (not os.isdir(root_directory .. "/deps/fluent"))
+	then
+		fluent_engine_repo = git_url_prefix .. "FluentEngine/fluent.git " .. root_directory .. "/deps/fluent"
+		os.execute("git clone " .. fluent_engine_repo )
+	end
 
-    include ("deps/fluent/fluent-engine.lua")
-    include ("examples/premake5.lua")
+	include ("deps/fluent/fluent-engine.lua")
+	include ("examples/premake5.lua")

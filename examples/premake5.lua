@@ -54,6 +54,17 @@ commons.example("light")
 		"light/ui_pass.c",
 		"light/main_pass.h",
 		"light/main_pass.c",
-		"light/shader_main_vert_spirv.c",
-		"light/shader_main_frag_spirv.c",
+		"light/shaders/shader_pbr_vert_spirv.c",
+		"light/shaders/shader_pbr_frag_spirv.c",
+		"light/shaders/shader_eq_to_cubemap_comp_spirv.c",
+		"light/shaders/shader_skybox_vert_spirv.c",
+		"light/shaders/shader_skybox_frag_spirv.c",
+		"light/shaders/shader_brdf_comp_spirv.c",
+		"light/shaders/shader_irradiance_comp_spirv.c",
+		"light/shaders/shader_specular_comp_spirv.c",
+	}
+
+	includedirs 
+	{
+		"light/shaders"
 	}

@@ -28,6 +28,7 @@ ui_pass_execute( const struct ft_device*   device,
 	}
 
 	nk_ft_new_frame();
+
 	if ( nk_begin( data->ui,
 	               "Debug Menu",
 	               nk_rect( 0, 0, 200, data->height ),
