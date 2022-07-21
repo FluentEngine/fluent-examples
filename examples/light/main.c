@@ -184,11 +184,11 @@ main( int argc, char** argv )
 	    .renderer_api = data.renderer_api,
 	};
 
-	struct ft_application_config config = {
+	struct ft_application_info app_info = {
 	    .argc        = argc,
 	    .argv        = argv,
 	    .window_info = window_info,
-	    .log_level   = FT_TRACE,
+	    .log_level   = FT_LOG_LEVEL_TRACE,
 	    .on_init     = on_init,
 	    .on_update   = on_update,
 	    .on_resize   = on_resize,
@@ -196,7 +196,7 @@ main( int argc, char** argv )
 	    .user_data   = &data,
 	};
 
-	ft_app_init( &config );
+	ft_app_init( &app_info );
 	ft_app_run();
 	ft_app_shutdown();
 
@@ -345,14 +345,17 @@ load_environment_map( const struct ft_device* device, const char* filename )
 
 	ft_create_image( device, &info, &image );
 
-	struct ft_upload_image_info upload_info = {
+	struct ft_image_upload_job job = {
+	    .image     = image,
 	    .width     = info.width,
 	    .height    = info.height,
 	    .mip_level = 0,
 	    .data      = data,
 	};
 
-	ft_upload_image( image, &upload_info );
+	ft_upload_image( &job );
+
+	ft_loader_wait_idle();
 
 	ft_free_image_data( data );
 
@@ -393,7 +396,7 @@ compute_pbr_maps( struct app_data* app )
 	ft_create_sampler( device, &sampler_info, &skybox_sampler );
 
 	struct ft_image* environment_eq =
-	    load_environment_map( device, "Mans_Outside_2k.hdr" );
+	    load_environment_map( device, "LA_Downtown_Helipad_GoldenHour_3k.hdr" );
 
 	struct ft_image_info image_info;
 	memset( &image_info, 0, sizeof( image_info ) );
@@ -538,7 +541,7 @@ compute_pbr_maps( struct app_data* app )
 	writes[ 2 ].descriptor_name           = "u_dst";
 	writes[ 2 ].image_descriptors         = &image_descriptors[ 1 ];
 
-	for ( uint32_t mip = 0; mip < pbr->environment->mip_level_count; ++mip )
+	for ( uint32_t mip = 0; mip < pbr->environment->mip_levels; ++mip )
 	{
 		image_descriptors[ 1 ].mip_level = mip;
 		ft_update_descriptor_set( device,
@@ -697,20 +700,20 @@ compute_pbr_maps( struct app_data* app )
 
 	image_barrier.old_state = FT_RESOURCE_STATE_GENERAL;
 	image_barrier.new_state = FT_RESOURCE_STATE_SHADER_READ_ONLY;
-	ft_cmd_barrier( cmd, 0, NULL, 0, NULL, 1, &image_barrier );	
+	ft_cmd_barrier( cmd, 0, NULL, 0, NULL, 1, &image_barrier );
 
 	ft_end_command_buffer( cmd );
 
 	ft_immediate_submit( app->graphics_queue, cmd );
 
-	for ( uint32_t mip = 0; mip < pbr->specular->mip_level_count; ++mip )
+	for ( uint32_t mip = 0; mip < pbr->specular->mip_levels; ++mip )
 	{
 		ft_destroy_descriptor_set( device, specular_set[ mip ] );
 	}
 
 	ft_destroy_descriptor_set( device, irradiance_set );
 	ft_destroy_descriptor_set( device, brdf_set );
-	for ( uint32_t mip = 0; mip < pbr->environment->mip_level_count; ++mip )
+	for ( uint32_t mip = 0; mip < pbr->environment->mip_levels; ++mip )
 	{
 		ft_destroy_descriptor_set( device, eq_to_cubemap_set[ mip ] );
 	}

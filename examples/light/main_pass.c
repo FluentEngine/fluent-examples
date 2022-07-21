@@ -6,7 +6,7 @@
 #include "skybox.frag.h"
 #include "main_pass.h"
 
-#define MODEL_PATH         MODEL_FOLDER "/DamagedHelmet/glTF/DamagedHelmet.gltf"
+#define MODEL_PATH         MODEL_FOLDER "/Sponza/glTF/Sponza.gltf"
 #define VERTEX_BUFFER_SIZE 30 * 1024 * 1024 * 8
 #define INDEX_BUFFER_SIZE  30 * 1024 * 1024 * 8
 #define MAX_DRAW_COUNT     200
@@ -262,14 +262,15 @@ main_pass_create_unbound_resources( const struct ft_device* device,
 
 	ft_create_image( device, &info, &data->unbound_image );
 
-	struct ft_upload_image_info upload_info = {
+	struct ft_image_upload_job job = {
+	    .image     = data->unbound_image,
 	    .data      = image_data,
 	    .width     = info.width,
 	    .height    = info.height,
 	    .mip_level = 0,
 	};
 
-	ft_upload_image( data->unbound_image, &upload_info );
+	ft_upload_image( &job );
 }
 
 FT_INLINE void
@@ -302,17 +303,22 @@ load_model_textures( const struct ft_device* device,
 
 		ft_create_image( device, &image_info, &data->model_images[ t ] );
 
-		struct ft_upload_image_info upload_info = {
+		struct ft_image_upload_job image_job = {
+		    .image     = data->model_images[ t ],
 		    .data      = texture->data,
 		    .width     = texture->width,
 		    .height    = texture->height,
 		    .mip_level = 0,
 		};
 
-		ft_upload_image( data->model_images[ t ], &upload_info );
+		ft_upload_image( &image_job );
 
-		ft_generate_mipmaps( data->model_images[ t ],
-		                     FT_RESOURCE_STATE_SHADER_READ_ONLY );
+		struct ft_generate_mipmaps_job mip_job = {
+		    .image = data->model_images[ t ],
+		    .state = FT_RESOURCE_STATE_SHADER_READ_ONLY,
+		};
+
+		ft_generate_mipmaps( &mip_job );
 	}
 }
 
@@ -329,7 +335,12 @@ main_pass_load_scene( const struct ft_device* device,
 
 	load_model_textures( device, data );
 
-	ft_begin_upload_batch();
+	struct vertex** draw_vertices;
+
+	if ( data->draw_count != 0 )
+	{
+		draw_vertices = malloc( sizeof( struct vertex* ) * data->draw_count );
+	}
 
 	for ( uint32_t m = 0; m < data->draw_count; ++m )
 	{
@@ -338,8 +349,9 @@ main_pass_load_scene( const struct ft_device* device,
 		data->draws[ m ].index_count  = mesh->index_count;
 		data->draws[ m ].first_vertex = first_vertex;
 
-		struct vertex* vertices =
+		draw_vertices[ m ] =
 		    malloc( sizeof( struct vertex ) * mesh->vertex_count );
+		struct vertex* vertices = draw_vertices[ m ];
 
 		for ( uint32_t v = 0; v < mesh->vertex_count; ++v )
 		{
@@ -363,22 +375,34 @@ main_pass_load_scene( const struct ft_device* device,
 
 		data->draws[ m ].first_index = first_index;
 
-		ft_upload_buffer( data->vertex_buffer,
-		                  first_vertex * sizeof( struct vertex ),
-		                  sizeof( struct vertex ) * mesh->vertex_count,
-		                  vertices );
-		ft_upload_buffer( data->index_buffer,
-		                  first_index * sizeof( uint16_t ),
-		                  mesh->index_count * sizeof( uint16_t ),
-		                  mesh->indices );
+		struct ft_buffer_upload_job job;
+		job.buffer = data->vertex_buffer;
+		job.offset = first_vertex * sizeof( struct vertex );
+		job.size   = mesh->vertex_count * sizeof( struct vertex );
+		job.data   = vertices;
+		ft_upload_buffer( &job );
+
+		job.buffer = data->index_buffer;
+		job.offset = first_index * sizeof( uint16_t );
+		job.size   = mesh->index_count * sizeof( uint16_t );
+		job.data   = mesh->indices;
+		ft_upload_buffer( &job );
 
 		first_index += mesh->index_count;
 		first_vertex += mesh->vertex_count;
-
-		free( vertices );
 	}
 
-	ft_end_upload_batch();
+	ft_loader_wait_idle();
+
+	for ( uint32_t i = 0; i < data->draw_count; ++i )
+	{
+		free( draw_vertices[ i ] );
+	}
+
+	if (data->draw_count != 0)
+	{
+		free( draw_vertices );
+	}
 
 	struct material_shader_data* materials =
 	    ft_map_memory( device, data->materials_buffer );
@@ -604,6 +628,8 @@ main_pass_create( const struct ft_device* device, void* user_data )
 	main_pass_load_scene( device, data );
 	main_pass_create_descriptor_sets( device, data );
 	main_pass_write_descriptors( device, data );
+
+	ft_loader_wait_idle();
 }
 
 static void
