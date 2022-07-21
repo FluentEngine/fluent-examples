@@ -335,13 +335,6 @@ main_pass_load_scene( const struct ft_device* device,
 
 	load_model_textures( device, data );
 
-	struct vertex** draw_vertices;
-
-	if ( data->draw_count != 0 )
-	{
-		draw_vertices = malloc( sizeof( struct vertex* ) * data->draw_count );
-	}
-
 	for ( uint32_t m = 0; m < data->draw_count; ++m )
 	{
 		const struct ft_mesh* mesh = &data->model.meshes[ m ];
@@ -349,9 +342,8 @@ main_pass_load_scene( const struct ft_device* device,
 		data->draws[ m ].index_count  = mesh->index_count;
 		data->draws[ m ].first_vertex = first_vertex;
 
-		draw_vertices[ m ] =
+		struct vertex* vertices =
 		    malloc( sizeof( struct vertex ) * mesh->vertex_count );
-		struct vertex* vertices = draw_vertices[ m ];
 
 		for ( uint32_t v = 0; v < mesh->vertex_count; ++v )
 		{
@@ -390,18 +382,8 @@ main_pass_load_scene( const struct ft_device* device,
 
 		first_index += mesh->index_count;
 		first_vertex += mesh->vertex_count;
-	}
 
-	ft_loader_wait_idle();
-
-	for ( uint32_t i = 0; i < data->draw_count; ++i )
-	{
-		free( draw_vertices[ i ] );
-	}
-
-	if (data->draw_count != 0)
-	{
-		free( draw_vertices );
+		free( vertices );
 	}
 
 	struct material_shader_data* materials =
