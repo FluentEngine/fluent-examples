@@ -217,6 +217,7 @@ init_renderer( struct app_data* app )
 	    device_info.backend = app->backend,
 	};
 	ft_create_device( app->backend, &device_info, &app->device );
+	ft_resource_loader_init( app->device );
 
 	struct ft_queue_info queue_info = {
 	    queue_info.queue_type = FT_QUEUE_TYPE_GRAPHICS,
@@ -275,6 +276,8 @@ shutdown_renderer( struct app_data* app )
 	}
 
 	ft_destroy_queue( app->graphics_queue );
+	ft_resource_loader_wait_idle();
+	ft_resource_loader_shutdown();
 	ft_destroy_device( app->device );
 	ft_destroy_renderer_backend( app->backend );
 }
@@ -355,7 +358,7 @@ load_environment_map( const struct ft_device* device, const char* filename )
 
 	ft_upload_image( &job );
 
-	ft_loader_wait_idle();
+	ft_resource_loader_wait_idle();
 
 	ft_free_image_data( data );
 

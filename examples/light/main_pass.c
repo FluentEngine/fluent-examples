@@ -611,7 +611,7 @@ main_pass_create( const struct ft_device* device, void* user_data )
 	main_pass_create_descriptor_sets( device, data );
 	main_pass_write_descriptors( device, data );
 
-	ft_loader_wait_idle();
+	ft_resource_loader_wait_idle();
 }
 
 static void
