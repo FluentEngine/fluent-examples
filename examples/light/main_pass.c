@@ -40,12 +40,20 @@ struct material_shader_data
 
 FT_STATIC_ASSERT( sizeof( struct material_shader_data ) == 80 );
 
+enum draw_data_type
+{
+	FT_DRAW_DATA_TYPE_NOT_INDEXED,
+	FT_DRAW_DATA_TYPE_INDEXED_16,
+	FT_DRAW_DATA_TYPE_INDEXED_32,
+};
+
 struct draw_data
 {
+	enum draw_data_type       type;
 	int32_t                   first_vertex;
+	uint32_t                  vertex_count;
 	uint32_t                  first_index;
 	uint32_t                  index_count;
-	enum ft_index_type        index_type;
 	struct ft_descriptor_set* material_set;
 };
 
@@ -61,7 +69,8 @@ struct main_pass_data
 	struct ft_descriptor_set_layout* skybox_dsl;
 	struct ft_pipeline*              skybox_pipeline;
 	struct ft_buffer*                vertex_buffer;
-	struct ft_buffer*                index_buffer;
+	struct ft_buffer*                index_buffer_16;
+	struct ft_buffer*                index_buffer_32;
 	struct ft_buffer*                ubo_buffer;
 	struct ft_buffer*                transforms_buffer;
 	struct ft_buffer*                materials_buffer;
@@ -206,7 +215,10 @@ main_pass_create_buffers( const struct ft_device* device,
 	ft_create_buffer( device, &info, &data->vertex_buffer );
 	info.descriptor_type = FT_DESCRIPTOR_TYPE_INDEX_BUFFER;
 	info.size            = INDEX_BUFFER_SIZE;
-	ft_create_buffer( device, &info, &data->index_buffer );
+	ft_create_buffer( device, &info, &data->index_buffer_16 );
+	info.descriptor_type = FT_DESCRIPTOR_TYPE_INDEX_BUFFER;
+	info.size            = INDEX_BUFFER_SIZE * 2;
+	ft_create_buffer( device, &info, &data->index_buffer_32 );
 	info.descriptor_type = FT_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	info.memory_usage    = FT_MEMORY_USAGE_CPU_TO_GPU;
 	info.size            = sizeof( struct camera_shader_data );
@@ -330,8 +342,9 @@ main_pass_load_scene( const struct ft_device* device,
 
 	data->draw_count = data->model.mesh_count;
 
-	uint32_t first_vertex = 0;
-	uint32_t first_index  = 0;
+	uint32_t first_vertex   = 0;
+	uint32_t first_index_16 = 0;
+	uint32_t first_index_32 = 0;
 
 	load_model_textures( device, data );
 
@@ -365,8 +378,6 @@ main_pass_load_scene( const struct ft_device* device,
 			}
 		}
 
-		data->draws[ m ].first_index = first_index;
-
 		struct ft_buffer_upload_job job;
 		job.buffer = data->vertex_buffer;
 		job.offset = first_vertex * sizeof( struct vertex );
@@ -374,13 +385,37 @@ main_pass_load_scene( const struct ft_device* device,
 		job.data   = vertices;
 		ft_upload_buffer( &job );
 
-		job.buffer = data->index_buffer;
-		job.offset = first_index * sizeof( uint16_t );
-		job.size   = mesh->index_count * sizeof( uint16_t );
-		job.data   = mesh->indices;
-		ft_upload_buffer( &job );
+		data->draws[ m ].type         = FT_DRAW_DATA_TYPE_NOT_INDEXED;
+		data->draws[ m ].vertex_count = mesh->vertex_count;
 
-		first_index += mesh->index_count;
+		if ( mesh->indices_16 )
+		{
+			data->draws[ m ].type        = FT_DRAW_DATA_TYPE_INDEXED_16;
+			data->draws[ m ].first_index = first_index_16;
+
+			job.buffer = data->index_buffer_16;
+			job.offset = first_index_16 * sizeof( uint16_t );
+			job.size   = mesh->index_count * sizeof( uint16_t );
+			job.data   = mesh->indices_16;
+			ft_upload_buffer( &job );
+
+			first_index_16 += mesh->index_count;
+		}
+
+		if ( mesh->indices_32 )
+		{
+			data->draws[ m ].type        = FT_DRAW_DATA_TYPE_INDEXED_16;
+			data->draws[ m ].first_index = first_index_32;
+
+			job.buffer = data->index_buffer_32;
+			job.offset = first_index_32 * sizeof( uint32_t );
+			job.size   = mesh->index_count * sizeof( uint32_t );
+			job.data   = mesh->indices_32;
+			ft_upload_buffer( &job );
+
+			first_index_32 += mesh->index_count;
+		}
+
 		first_vertex += mesh->vertex_count;
 
 		free( vertices );
@@ -629,7 +664,6 @@ main_pass_execute( const struct ft_device*   device,
 	ft_cmd_bind_pipeline( cmd, data->pbr_pipeline );
 	ft_cmd_bind_descriptor_set( cmd, 0, data->pbr_set, data->pbr_pipeline );
 	ft_cmd_bind_vertex_buffer( cmd, data->vertex_buffer, 0 );
-	ft_cmd_bind_index_buffer( cmd, data->index_buffer, 0, FT_INDEX_TYPE_U16 );
 
 	float4x4* transforms = ft_map_memory( device, data->transforms_buffer );
 
@@ -663,12 +697,44 @@ main_pass_execute( const struct ft_device*   device,
 		                            draw->material_set,
 		                            data->pbr_pipeline );
 
-		ft_cmd_draw_indexed( cmd,
-		                     draw->index_count,
-		                     1,
-		                     draw->first_index,
-		                     draw->first_vertex,
-		                     0 );
+		switch ( draw->type )
+		{
+		case FT_DRAW_DATA_TYPE_NOT_INDEXED:
+		{
+			ft_cmd_draw( cmd, draw->vertex_count, 1, draw->first_vertex, 0 );
+			break;
+		}
+		case FT_DRAW_DATA_TYPE_INDEXED_16:
+		{
+			ft_cmd_bind_index_buffer( cmd,
+			                          data->index_buffer_16,
+			                          0,
+			                          FT_INDEX_TYPE_U16 );
+			ft_cmd_draw_indexed( cmd,
+			                     draw->index_count,
+			                     1,
+			                     draw->first_index,
+			                     draw->first_vertex,
+			                     0 );
+			break;
+		}
+		case FT_DRAW_DATA_TYPE_INDEXED_32:
+		{
+			ft_cmd_bind_index_buffer( cmd,
+			                          data->index_buffer_32,
+			                          0,
+			                          FT_INDEX_TYPE_U32 );
+
+			ft_cmd_draw_indexed( cmd,
+			                     draw->index_count,
+			                     1,
+			                     draw->first_index,
+			                     draw->first_vertex,
+			                     0 );
+			break;
+		}
+		default: break;
+		}
 	}
 
 	ft_cmd_bind_pipeline( cmd, data->skybox_pipeline );
@@ -705,7 +771,8 @@ main_pass_destroy( const struct ft_device* device, void* user_data )
 	ft_destroy_buffer( device, data->materials_buffer );
 	ft_destroy_buffer( device, data->transforms_buffer );
 	ft_destroy_buffer( device, data->ubo_buffer );
-	ft_destroy_buffer( device, data->index_buffer );
+	ft_destroy_buffer( device, data->index_buffer_32 );
+	ft_destroy_buffer( device, data->index_buffer_16 );
 	ft_destroy_buffer( device, data->vertex_buffer );
 	ft_destroy_pipeline( device, data->pbr_pipeline );
 	ft_destroy_pipeline( device, data->skybox_pipeline );
