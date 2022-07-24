@@ -40,7 +40,7 @@ workspace "fluent-examples"
 
 	if (not os.isdir(path.join(root_directory, "../glTF-Sample-Models")))
 	then
-		os.execute("git clone https://github.com/KhronosGroup/glTF-Sample-Models.git " .. root_directory .. "../glTF-Sample-Models")
+		os.execute("git clone https://github.com/KhronosGroup/glTF-Sample-Models.git " .. root_directory .. "/../glTF-Sample-Models")
 	end
 
 	include ("deps/fluent/fluent-engine.lua")
