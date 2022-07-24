@@ -369,10 +369,10 @@ static void
 compute_pbr_maps( struct app_data* app )
 {
 	static const uint32_t SKYBOX_SIZE     = 2048;
-	uint32_t              SKYBOX_MIPS     = ( uint ) log2( SKYBOX_SIZE ) + 1;
+	uint32_t              SKYBOX_MIPS     = ( uint32_t ) log2( SKYBOX_SIZE ) + 1;
 	static const uint32_t IRRADIANCE_SIZE = 32;
 	static const uint32_t SPECULAR_SIZE   = 128;
-	uint32_t              SPECULAR_MIPS   = ( uint ) log2( SPECULAR_SIZE ) + 1;
+	uint32_t              SPECULAR_MIPS   = ( uint32_t ) log2( SPECULAR_SIZE ) + 1;
 	static const uint32_t BRDF_LUT_SIZE   = 512;
 
 	const struct ft_device*   device = app->device;
@@ -399,7 +399,7 @@ compute_pbr_maps( struct app_data* app )
 	ft_create_sampler( device, &sampler_info, &skybox_sampler );
 
 	struct ft_image* environment_eq =
-	    load_environment_map( device, "LA_Downtown_Helipad_GoldenHour_3k.hdr" );
+	    load_environment_map( device, "Newport_Loft_Ref.hdr" );
 
 	struct ft_image_info image_info;
 	memset( &image_info, 0, sizeof( image_info ) );
