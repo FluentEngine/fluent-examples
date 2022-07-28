@@ -6,7 +6,7 @@
 #include "skybox.frag.h"
 #include "main_pass.h"
 
-#define MODEL_PATH         MODEL_FOLDER "/Sponza/glTF/Sponza.gltf"
+#define MODEL_PATH         MODEL_FOLDER "/DamagedHelmet/glTF/DamagedHelmet.gltf"
 #define VERTEX_BUFFER_SIZE 30 * 1024 * 1024 * 8
 #define INDEX_BUFFER_SIZE  30 * 1024 * 1024 * 8
 #define MAX_DRAW_COUNT     200
