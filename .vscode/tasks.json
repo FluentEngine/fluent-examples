@@ -5,7 +5,10 @@
 			"type": "shell",
 			"label": "run premake",
 			"windows": {
-				"command": "../premake5.exe --build_directory=build vs2019 --d3d12_backend=0",
+				"command": "../premake5.exe --build_directory=build vs2019 --d3d12_backend=0"
+			},
+			"linux": {
+				"command": "premake5 --build_directory=/tmp/fluent-examples gmake2"	
 			},
 			"presentation": {
 				"reveal": "silent"
@@ -23,6 +26,12 @@
 					"cwd": "${workspaceFolder}/build/"
 				},
 			},
+			"linux": {
+				"command": "make -j12 config=debug",
+				"options": {
+					"cwd": "/tmp/fluent-examples/"
+				},
+			},
 			"dependsOn": [
 				"run premake"
 			],
@@ -38,6 +47,11 @@
 				"options": {
 					"cwd": "${workspaceFolder}/build/light/"
 				},
+			},
+			"linux":{
+				"options": {
+					"cwd": "/tmp/fluent-examples/light/"
+				}
 			},
 			"dependsOn": [
 				"build"
