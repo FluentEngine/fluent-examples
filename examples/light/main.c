@@ -184,7 +184,7 @@ main( int argc, char** argv )
 	    .argc        = argc,
 	    .argv        = argv,
 	    .window_info = window_info,
-	    .log_level   = FT_LOG_LEVEL_TRACE,
+	    .log_level   = FT_LOG_LEVEL_INFO,
 	    .on_init     = on_init,
 	    .on_update   = on_update,
 	    .on_resize   = on_resize,
@@ -192,8 +192,11 @@ main( int argc, char** argv )
 	    .user_data   = &data,
 	};
 
-	ft_app_init( &app_info );
-	ft_app_run();
+	if ( ft_app_init( &app_info ) )
+	{
+		ft_app_run();
+	}
+
 	ft_app_shutdown();
 
 	return EXIT_SUCCESS;
