@@ -1,5 +1,5 @@
-#include <fluent/os.h>
-#include <fluent/renderer.h>
+#include <fluent/fluent.h>
+
 #include "pbr.vert.h"
 #include "pbr.frag.h"
 #include "skybox.vert.h"
@@ -478,7 +478,7 @@ main_pass_load_scene( const struct ft_device* device,
 
 		ft_update_descriptor_set( device,
 		                          set,
-		                          FT_ARRAY_SIZE( descriptor_writes ),
+		                          FT_COUNTOF( descriptor_writes ),
 		                          descriptor_writes );
 
 		data->draws[ m ].material_set = set;
@@ -581,7 +581,7 @@ main_pass_write_descriptors( const struct ft_device* device,
 
 	ft_update_descriptor_set( device,
 	                          data->pbr_set,
-	                          FT_ARRAY_SIZE( descriptor_writes ),
+	                          FT_COUNTOF( descriptor_writes ),
 	                          descriptor_writes );
 
 	struct ft_sampler_descriptor sampler_descriptor = {
@@ -616,7 +616,7 @@ main_pass_write_descriptors( const struct ft_device* device,
 
 	ft_update_descriptor_set( device,
 	                          data->skybox_set,
-	                          FT_ARRAY_SIZE( skybox_descriptor_writes ),
+	                          FT_COUNTOF( skybox_descriptor_writes ),
 	                          skybox_descriptor_writes );
 }
 

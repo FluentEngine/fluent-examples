@@ -1,5 +1,5 @@
-#include <fluent/os.h>
-#include <fluent/renderer.h>
+#include <stdio.h>
+#include <fluent/fluent.h>
 #include "ui_pass.h"
 
 struct ui_pass_data

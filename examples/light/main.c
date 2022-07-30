@@ -1,5 +1,4 @@
-#include <fluent/os.h>
-#include <fluent/renderer.h>
+#include <fluent/fluent.h>
 
 #include "ui_pass.h"
 #include "main_pass.h"
@@ -61,9 +60,9 @@ static void
 free_pbr_maps( struct app_data* );
 
 static void
-on_init( const struct ft_application_callback_data* cb_data )
+on_init( void* p )
 {
-	struct app_data* app = cb_data->user_data;
+	struct app_data* app = p;
 
 	struct ft_camera_info camera_info = {
 	    .fov         = radians( 45.0f ),
@@ -108,14 +107,13 @@ on_init( const struct ft_application_callback_data* cb_data )
 }
 
 static void
-on_update( const struct ft_application_callback_data* cb_data )
+on_update( float delta_time, void* p )
 {
-	struct app_data* app = cb_data->user_data;
+	struct app_data* app = p;
 
 	if ( ft_is_key_pressed( FT_KEY_LEFT_ALT ) )
 	{
-		ft_camera_controller_update( &app->camera_controller,
-		                             cb_data->delta_time );
+		ft_camera_controller_update( &app->camera_controller, delta_time );
 	}
 	else
 	{
@@ -127,36 +125,49 @@ on_update( const struct ft_application_callback_data* cb_data )
 	struct ft_command_buffer* cmd = app->frames[ app->frame_index ].cmd;
 	ft_begin_command_buffer( cmd );
 
-	ft_rg_setup_attachments( app->graph,
-	                         app->swapchain->images[ app->image_index ] );
-	ft_rg_execute( cmd, app->graph );
+#define DEBUG_RESIZE 0
+	if ( DEBUG_RESIZE )
+	{
+		struct ft_image_barrier barrier = {
+		    .image     = app->swapchain->images[ app->image_index ],
+		    .old_state = FT_RESOURCE_STATE_UNDEFINED,
+		    .new_state = FT_RESOURCE_STATE_PRESENT,
+		};
 
+		ft_cmd_barrier( cmd, 0, NULL, 0, NULL, 1, &barrier );
+	}
+	else
+	{
+		ft_rg_setup_attachments( app->graph,
+		                         app->swapchain->images[ app->image_index ] );
+		ft_rg_execute( cmd, app->graph );
+	}
 	ft_end_command_buffer( cmd );
 
 	end_frame( app );
 }
 
 static void
-on_resize( const struct ft_application_callback_data* cb_data )
+on_resize( uint32_t width, uint32_t height, void* p )
 {
-	struct app_data* app = cb_data->user_data;
+	struct app_data* app = p;
 
+	ft_resource_loader_wait_idle();
 	ft_queue_wait_idle( app->graphics_queue );
-	ft_resize_swapchain( app->device,
-	                     app->swapchain,
-	                     cb_data->width,
-	                     cb_data->height );
+	ft_resize_swapchain( app->device, app->swapchain, width, height );
 
 	ft_rg_set_swapchain_dimensions( app->graph,
 	                                app->swapchain->width,
 	                                app->swapchain->height );
 	ft_rg_build( app->graph );
+
+	ft_resource_loader_wait_idle();
 }
 
 static void
-on_shutdown( const struct ft_application_callback_data* cb_data )
+on_shutdown( void* p )
 {
-	struct app_data* app = cb_data->user_data;
+	struct app_data* app = p;
 	ft_queue_wait_idle( app->graphics_queue );
 	ft_rg_destroy( app->graph );
 	free_pbr_maps( app );
@@ -368,12 +379,12 @@ load_environment_map( const struct ft_device* device, const char* filename )
 static void
 compute_pbr_maps( struct app_data* app )
 {
-	static const uint32_t SKYBOX_SIZE     = 2048;
-	uint32_t              SKYBOX_MIPS     = ( uint32_t ) log2( SKYBOX_SIZE ) + 1;
+	static const uint32_t SKYBOX_SIZE = 2048;
+	uint32_t              SKYBOX_MIPS = ( uint32_t ) log2( SKYBOX_SIZE ) + 1;
 	static const uint32_t IRRADIANCE_SIZE = 32;
 	static const uint32_t SPECULAR_SIZE   = 128;
-	uint32_t              SPECULAR_MIPS   = ( uint32_t ) log2( SPECULAR_SIZE ) + 1;
-	static const uint32_t BRDF_LUT_SIZE   = 512;
+	uint32_t SPECULAR_MIPS = ( uint32_t ) log2( SPECULAR_SIZE ) + 1;
+	static const uint32_t BRDF_LUT_SIZE = 512;
 
 	const struct ft_device*   device = app->device;
 	struct pbr_maps*          pbr    = &app->pbr;
@@ -549,7 +560,7 @@ compute_pbr_maps( struct app_data* app )
 		image_descriptors[ 1 ].mip_level = mip;
 		ft_update_descriptor_set( device,
 		                          eq_to_cubemap_set[ mip ],
-		                          FT_ARRAY_SIZE( writes ),
+		                          FT_COUNTOF( writes ),
 		                          writes );
 	}
 
@@ -570,7 +581,7 @@ compute_pbr_maps( struct app_data* app )
 	writes[ 2 ].image_descriptors         = &image_descriptors[ 1 ];
 	ft_update_descriptor_set( device,
 	                          irradiance_set,
-	                          FT_ARRAY_SIZE( writes ),
+	                          FT_COUNTOF( writes ),
 	                          writes );
 
 	memset( image_descriptors, 0, sizeof( image_descriptors ) );
@@ -594,7 +605,7 @@ compute_pbr_maps( struct app_data* app )
 		image_descriptors[ 1 ].mip_level = mip;
 		ft_update_descriptor_set( device,
 		                          specular_set[ mip ],
-		                          FT_ARRAY_SIZE( writes ),
+		                          FT_COUNTOF( writes ),
 		                          writes );
 	}
 

@@ -17,33 +17,12 @@ project(name)
 
 	defines { "MODEL_FOLDER=" .. '"' .. path.getabsolute("../../glTF-Sample-Models/2.0/") .. '"' }
 
-	includedirs
-	{
+	sysincludedirs {
 		"../deps/fluent/sources",
-	}
-
-	sysincludedirs
-	{
-		"../deps/fluent/sources/third_party/",
-	}
-
-	links
-	{
-		"ft_renderer",
-		"ft_os",
-		"ft_log"
+		"../deps/fluent/third_party",
 	}
 
 	fluent_engine.link()
-
-	filter { "system:linux" }
-		links
-		{
-			"m"
-		}
-	filter { "system:windows" }
-		entrypoint "mainCRTStartup"
-	filter { }
 end
 
 commons.example("light")
