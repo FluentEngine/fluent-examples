@@ -1,0 +1,51 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "run premake",
+			"windows": {
+				"command": "../premake5.exe --build_directory=build vs2019 --d3d12_backend=0",
+			},
+			"presentation": {
+				"reveal": "silent"
+			},
+			"options": {
+				"cwd": "${workspaceFolder}"
+			}
+		},
+		{
+			"type": "shell",
+			"label": "build",
+			"windows": {
+				"command": "msbuild.exe ${workspaceFolder}/build/fluent-examples.sln",
+				"options": {
+					"cwd": "${workspaceFolder}/build/"
+				},
+			},
+			"dependsOn": [
+				"run premake"
+			],
+			"dependsOrder": "sequence",
+			"presentation": {
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "build and run",
+			"command": "light",
+			"windows": {
+				"options": {
+					"cwd": "${workspaceFolder}/build/light/"
+				},
+			},
+			"dependsOn": [
+				"build"
+			],
+			"dependsOrder": "sequence",
+			"presentation": {
+				"reveal": "silent"
+			}
+		}
+	]
+}
