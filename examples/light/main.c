@@ -84,7 +84,7 @@ on_init( void* p )
 	app->ctx = nk_ft_init( ft_get_wsi_info(),
 	                       app->device,
 	                       app->graphics_queue,
-	                       app->swapchain->format,
+	                       ft_get_swapchain_format( app->swapchain ),
 	                       FT_FORMAT_UNDEFINED );
 
 	nk_ft_font_stash_begin( &app->atlas );
@@ -100,9 +100,10 @@ on_init( void* p )
 	                    &app->pbr );
 	register_ui_pass( app->graph, app->swapchain, "back", app->ctx );
 	ft_rg_set_backbuffer_source( app->graph, "back" );
-	ft_rg_set_swapchain_dimensions( app->graph,
-	                                app->swapchain->width,
-	                                app->swapchain->height );
+
+	uint32_t width, height;
+	ft_get_swapchain_size( app->swapchain, &width, &height );
+	ft_rg_set_swapchain_dimensions( app->graph, width, height );
 	ft_rg_build( app->graph );
 }
 
@@ -124,24 +125,10 @@ on_update( float delta_time, void* p )
 
 	struct ft_command_buffer* cmd = app->frames[ app->frame_index ].cmd;
 	ft_begin_command_buffer( cmd );
-
-#define DEBUG_RESIZE 0
-	if ( DEBUG_RESIZE )
-	{
-		struct ft_image_barrier barrier = {
-		    .image     = app->swapchain->images[ app->image_index ],
-		    .old_state = FT_RESOURCE_STATE_UNDEFINED,
-		    .new_state = FT_RESOURCE_STATE_PRESENT,
-		};
-
-		ft_cmd_barrier( cmd, 0, NULL, 0, NULL, 1, &barrier );
-	}
-	else
-	{
-		ft_rg_setup_attachments( app->graph,
-		                         app->swapchain->images[ app->image_index ] );
-		ft_rg_execute( cmd, app->graph );
-	}
+	ft_rg_setup_attachments(
+	    app->graph,
+	    ft_get_swapchain_image( app->swapchain, app->image_index ) );
+	ft_rg_execute( cmd, app->graph );
 	ft_end_command_buffer( cmd );
 
 	end_frame( app );
@@ -156,9 +143,7 @@ on_resize( uint32_t width, uint32_t height, void* p )
 	ft_queue_wait_idle( app->graphics_queue );
 	ft_resize_swapchain( app->device, app->swapchain, width, height );
 
-	ft_rg_set_swapchain_dimensions( app->graph,
-	                                app->swapchain->width,
-	                                app->swapchain->height );
+	ft_rg_set_swapchain_dimensions( app->graph, width, height );
 	ft_rg_build( app->graph );
 
 	ft_resource_loader_wait_idle();
@@ -450,15 +435,17 @@ compute_pbr_maps( struct app_data* app )
 	struct ft_shader* irradiance_shader;
 	struct ft_shader* specular_shader;
 
+	enum ft_renderer_api api = ft_get_device_api( device );
+
 	struct ft_shader_info shader_info;
 	memset( &shader_info, 0, sizeof( shader_info ) );
-	shader_info.compute = get_eq_to_cubemap_comp_shader( device->api );
+	shader_info.compute = get_eq_to_cubemap_comp_shader( api );
 	ft_create_shader( device, &shader_info, &eq_to_cubemap_shader );
-	shader_info.compute = get_brdf_comp_shader( device->api );
+	shader_info.compute = get_brdf_comp_shader( api );
 	ft_create_shader( device, &shader_info, &brdf_shader );
-	shader_info.compute = get_irradiance_comp_shader( device->api );
+	shader_info.compute = get_irradiance_comp_shader( api );
 	ft_create_shader( device, &shader_info, &irradiance_shader );
-	shader_info.compute = get_specular_comp_shader( device->api );
+	shader_info.compute = get_specular_comp_shader( api );
 	ft_create_shader( device, &shader_info, &specular_shader );
 
 	struct ft_descriptor_set_layout* eq_to_cubemap_dsl;
@@ -555,7 +542,7 @@ compute_pbr_maps( struct app_data* app )
 	writes[ 2 ].descriptor_name           = "u_dst";
 	writes[ 2 ].image_descriptors         = &image_descriptors[ 1 ];
 
-	for ( uint32_t mip = 0; mip < pbr->environment->mip_levels; ++mip )
+	for ( uint32_t mip = 0; mip < SKYBOX_MIPS; ++mip )
 	{
 		image_descriptors[ 1 ].mip_level = mip;
 		ft_update_descriptor_set( device,
@@ -720,14 +707,14 @@ compute_pbr_maps( struct app_data* app )
 
 	ft_immediate_submit( app->graphics_queue, cmd );
 
-	for ( uint32_t mip = 0; mip < pbr->specular->mip_levels; ++mip )
+	for ( uint32_t mip = 0; mip < SPECULAR_MIPS; ++mip )
 	{
 		ft_destroy_descriptor_set( device, specular_set[ mip ] );
 	}
 
 	ft_destroy_descriptor_set( device, irradiance_set );
 	ft_destroy_descriptor_set( device, brdf_set );
-	for ( uint32_t mip = 0; mip < pbr->environment->mip_levels; ++mip )
+	for ( uint32_t mip = 0; mip < SPECULAR_MIPS; ++mip )
 	{
 		ft_destroy_descriptor_set( device, eq_to_cubemap_set[ mip ] );
 	}

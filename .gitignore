@@ -1,6 +1,6 @@
 build/
 deps/
-
+**settings.json
 *.user
 
 # MacOS generated files #

@@ -96,9 +96,11 @@ FT_INLINE void
 main_pass_create_pbr_pipeline( const struct ft_device* device,
                                struct main_pass_data*  data )
 {
+	enum ft_renderer_api api = ft_get_device_api( device );
+
 	struct ft_shader_info shader_info = {
-	    .vertex   = get_pbr_vert_shader( device->api ),
-	    .fragment = get_pbr_frag_shader( device->api ),
+	    .vertex   = get_pbr_vert_shader( api ),
+	    .fragment = get_pbr_frag_shader( api ),
 	};
 
 	struct ft_shader* shader;
@@ -166,9 +168,11 @@ FT_INLINE void
 main_pass_create_skybox_pipeline( const struct ft_device* device,
                                   struct main_pass_data*  data )
 {
+	enum ft_renderer_api api = ft_get_device_api( device );
+
 	struct ft_shader_info shader_info = {
-	    .vertex   = get_skybox_vert_shader( device->api ),
-	    .fragment = get_skybox_frag_shader( device->api ),
+	    .vertex   = get_skybox_vert_shader( api ),
+	    .fragment = get_skybox_frag_shader( api ),
 	};
 
 	struct ft_shader* shader;
@@ -814,9 +818,11 @@ register_main_pass( struct ft_render_graph*    graph,
                     const struct ft_camera*    camera,
                     struct pbr_maps*           maps )
 {
-	main_pass_data.width            = swapchain->width;
-	main_pass_data.height           = swapchain->height;
-	main_pass_data.swapchain_format = swapchain->format;
+	ft_get_swapchain_size( swapchain,
+	                       &main_pass_data.width,
+	                       &main_pass_data.height );
+
+	main_pass_data.swapchain_format = ft_get_swapchain_format( swapchain );
 	main_pass_data.camera           = camera;
 	main_pass_data.maps             = maps;
 	ft_timer_reset( &main_pass_data.timer );

@@ -60,9 +60,10 @@ register_ui_pass( struct ft_render_graph*    graph,
                   const char*                backbuffer_source_name,
                   struct nk_context*         ui )
 {
-	ui_pass_data.width  = swapchain->width;
-	ui_pass_data.height = swapchain->height;
-	ui_pass_data.ui     = ui;
+	ft_get_swapchain_size( swapchain,
+	                       &ui_pass_data.width,
+	                       &ui_pass_data.height );
+	ui_pass_data.ui = ui;
 
 	struct ft_render_pass* pass;
 	ft_rg_add_pass( graph, "ui", &pass );
