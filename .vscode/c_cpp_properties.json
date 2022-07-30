@@ -29,6 +29,20 @@
             "cStandard": "gnu17",
             "cppStandard": "gnu++17",
             "intelliSenseMode": "linux-clang-x64"
+        },
+        {
+            "name": "MacOS",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [
+                "MODEL_FOLDER=\"\"",
+                "FT_DEBUG=1",
+                "VULKAN_BACKEND=1"
+            ],
+            "cStandard": "gnu17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "macos-clang-arm64"
         }
     ],
     "version": 4

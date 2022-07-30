@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Windows Launch",
+            "name": "(vsdbg) launch",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/light/light",
@@ -16,13 +16,15 @@
             "console": "externalTerminal"
         },
         {
-            "name": "Linux Launch (gdb)",
+            "name": "(gdb) launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "/tmp/fluent-examples/light/light",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "/tmp/fluent-examples/light",
+            "linux": {
+                "program": "/tmp/fluent-examples/light/light",
+                "cwd": "/tmp/fluent-examples/light",
+            },
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
@@ -33,11 +35,29 @@
                     "ignoreFailures": true
                 },
                 {
-                    "description":  "Set Disassembly Flavor to Intel",
+                    "description": "Set Disassembly Flavor to Intel",
                     "text": "-gdb-set disassembly-flavor intel",
                     "ignoreFailures": true
                 }
             ]
+        },
+        {
+            "name": "(lldb) Launch",
+            "type": "cppdbg",
+            "request": "launch",
+            "linux": {
+                "program": "/tmp/fluent-examples/light/light",
+                "cwd": "/tmp/fluent-examples/light",
+            },
+            "osx": {
+                "program": "/tmp/fluent-examples/light/light.app",
+                "cwd": "/tmp/fluent-examples/light/",
+            },
+            "args": [],
+            "stopAtEntry": false,
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "lldb"
         },
     ]
 }

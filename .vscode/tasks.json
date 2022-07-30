@@ -10,6 +10,9 @@
 			"linux": {
 				"command": "premake5 --build_directory=/tmp/fluent-examples gmake2"	
 			},
+			"osx": {
+				"command": "premake5 --build_directory=/tmp/fluent-examples gmake2 --metal_backend=0"
+			},
 			"presentation": {
 				"reveal": "silent"
 			},
@@ -32,6 +35,12 @@
 					"cwd": "/tmp/fluent-examples/"
 				},
 			},
+			"osx": {
+				"command": "make -j12 config=debug",
+				"options": {
+					"cwd": "/tmp/fluent-examples/"
+				},
+			},
 			"dependsOn": [
 				"run premake"
 			],
@@ -42,13 +51,20 @@
 		},
 		{
 			"label": "build and run",
-			"command": "light",
 			"windows": {
+				"command": "light",
 				"options": {
 					"cwd": "${workspaceFolder}/build/light/"
 				},
 			},
 			"linux":{
+				"command": "light",
+				"options": {
+					"cwd": "/tmp/fluent-examples/light/"
+				}
+			},
+			"osx":{
+				"command": "light.app",
 				"options": {
 					"cwd": "/tmp/fluent-examples/light/"
 				}
